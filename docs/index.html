@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Executive Windows diagnostics dashboard. Visualize report findings, workstreams, evidence activity and recommended priorities. Managed by Dibyendu.">
+  <meta name="referrer" content="no-referrer">
+  <title>Windows Diagnostics · Managed by Dibyendu</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230b827e'/%3E%3Cpath d='M10 12l4 16 6-11 6 11 4-16' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./executive.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Demo scenarios">
+      <a class="brand" href="./" aria-label="Windows Diagnostics home"><span class="brand-mark">W</span><span>WINDOWS<br><span class="brand-sub">DIAGNOSTICS</span></span></a>
+      <p class="manager">Managed by Dibyendu</p>
+      <nav class="exec-nav" aria-label="Workspace views"><button type="button" class="exec-nav-link active" data-exec-view="dashboard" aria-current="page"><span aria-hidden="true">▥</span> Executive dashboard</button><button type="button" class="exec-nav-link" data-exec-view="workflow"><span aria-hidden="true">⌁</span> Guided investigation</button></nav>
+      <div id="scenario-group" hidden>
+      <div class="nav-heading">INVESTIGATION SCENARIOS</div>
+      <nav id="scenario-nav" class="scenario-nav"></nav>
+      </div>
+      <div class="sidebar-bottom"><span class="small-label">EVIDENCE FIRST</span><p>Inspect. Correlate. Recommend.</p><div class="sidebar-rule"></div><span class="live-marker"><i></i> Read-only analysis</span><p class="sidebar-note" id="sidebar-data-mode">Synthetic records only.<br>No endpoint is connected.</p></div>
+    </aside>
+    <main id="main-content">
+      <section id="executive-view" class="exec-view" aria-label="Executive dashboard">
+        <header class="exec-header"><div><div class="exec-kicker">WORKSPACE <span aria-hidden="true">/</span> EXECUTIVE OVERVIEW</div><h1>Endpoint intelligence<span style="color:var(--teal)">.</span></h1><p class="exec-subtitle">Turn diagnostic output into clear priorities and the evidence behind them.</p></div><div class="exec-actions"><span class="exec-top-badge">◈ Read-only</span><button type="button" class="exec-btn" id="exec-export">↗ Export brief</button><button type="button" class="exec-btn primary" id="exec-import">＋ Import report</button></div></header>
+        <input id="exec-file-input" type="file" accept=".json,application/json" multiple hidden>
+        <div id="exec-data-banner" class="exec-data-banner"><div><span id="exec-data-label" class="exec-data-label">DEMONSTRATION DATA</span><p id="exec-data-note" class="exec-data-note">Four sample investigations. No device or tenant is connected.</p></div><label class="exec-filter"><span class="exec-sr-only">Dataset</span><select id="exec-dataset" aria-label="Dashboard dataset"><option value="sample">Sample reports</option><option value="imported" disabled>Imported reports</option></select></label></div>
+        <div id="exec-import-status" class="exec-import-status" role="status" hidden></div>
+        <div class="exec-filterbar" aria-label="Dashboard filters"><label class="exec-filter"><span>WORKSTREAM</span><select id="exec-category"><option value="all">All workstreams</option><option>Win32 apps</option><option>Windows patching</option><option>Conditional Access</option><option>Autopilot &amp; ESP</option><option>Enterprise</option></select></label><label class="exec-filter"><span>SEVERITY</span><select id="exec-severity"><option value="all">All findings</option><option value="error">Error / high / critical</option><option value="warning">Warning / medium</option><option value="info">Informational / low</option></select></label><label class="exec-filter"><span>FROM · UTC</span><input id="exec-from" type="date"></label><label class="exec-filter"><span>TO · UTC</span><input id="exec-to" type="date"></label><label class="exec-filter exec-search"><span class="exec-sr-only">Search report findings or evidence</span><input id="exec-search" type="search" placeholder="Search findings or error codes…" autocomplete="off"></label><button class="exec-filter-reset" id="exec-reset" type="button">Reset</button></div>
+        <div id="exec-kpis" class="exec-kpis" aria-label="Diagnostic report measures"></div>
+        <div class="exec-grid-primary"><section class="exec-panel"><div class="exec-panel-head"><div><h2>Evidence activity</h2><p class="exec-panel-sub">Recorded events across the observed evidence window</p></div><span id="exec-window" class="exec-panel-tag"></span></div><div class="exec-chart-body"><div id="exec-timeline" class="exec-timeline"></div><div class="exec-chart-legend"><span class="exec-legend-item"><i class="exec-dot" style="background:#148f9b"></i>All evidence records</span><span class="exec-legend-item"><i class="exec-dot" style="background:#b0d4d1"></i>Result-stage records</span><span class="exec-legend-note">Volume, rather than success or failure rate</span></div></div></section><section class="exec-panel"><div class="exec-panel-head"><div><h2>Finding severity</h2><p class="exec-panel-sub">Select a segment label to filter</p></div><span class="exec-panel-tag">REPORTED FINDINGS</span></div><div id="exec-severity-chart" class="exec-chart-body"></div></section></div>
+        <div class="exec-grid-secondary"><section class="exec-panel"><div class="exec-panel-head"><div><h2>Findings by workstream</h2><p class="exec-panel-sub">Select a workstream to focus the dashboard</p></div><button id="exec-all-domains" type="button" class="exec-filter-reset">View all</button></div><div id="exec-domain-chart" class="exec-chart-body"></div></section><section class="exec-panel"><div class="exec-panel-head"><div><h2>Deployment lifecycle</h2><p class="exec-panel-sub">Observed stages across the selected records</p></div><span class="exec-panel-tag">EVENT COUNTS</span></div><div id="exec-stage-chart" class="exec-chart-body"></div></section></div>
+        <div class="exec-lower-grid"><section class="exec-panel"><div class="exec-panel-head"><div><h2>Review priorities</h2><p class="exec-panel-sub">Ranked findings with supporting evidence and suggested next steps</p></div><span class="exec-panel-tag" id="exec-priority-count"></span></div><div id="exec-priority-table" class="exec-priority-table"></div></section><section class="exec-panel"><div class="exec-panel-head"><div><h2>Observed source inventory</h2><p class="exec-panel-sub">Record counts reflect the current filters</p></div><span class="exec-panel-tag" id="exec-source-count"></span></div><div id="exec-source-list" class="exec-source-list"></div><p class="exec-source-footnote">A source listed without records does not establish collection success or complete coverage.</p></section></div>
+        <details class="exec-scope-note"><summary>Scope, source limitations &amp; import guidance <span id="exec-note-count"></span></summary><div id="exec-notes"></div><p>Import one or more JSON exports from <strong>Windows Diagnostics → Export report → JSON</strong>. Raw logs, EVTX files and Entra exports should be analyzed in the desktop app first. Files stay in this browser session and are not uploaded. Use redacted reports and review the exported brief before sharing.</p></details>
+        <footer class="exec-footer"><span>Windows Diagnostics <span aria-hidden="true">/</span> Managed by Dibyendu</span><span>No repairs, deletions, policy changes or device actions.</span></footer>
+      </section>
+      <div id="workflow-view" hidden>
+      <header class="page-header"><div><div class="eyebrow">DIAGNOSTICS WORKSPACE</div><h1>Follow the evidence.</h1><p>Walk through an investigation, from the first log to a suggested resolution.</p></div><span class="read-only"><span aria-hidden="true">◈</span> Read-only by design</span></header>
+      <div class="demo-banner"><span class="demo-tag">DEMO</span><span>Sample data · No connection to your PC or tenant · No changes are applied</span><button id="reset-btn" class="text-button" type="button">Reset walkthrough ↺</button></div>
+      <section class="workflow-panel" aria-label="Investigation workflow"><div id="stepper" class="stepper"></div></section>
+      <section id="metrics" class="metrics" aria-label="Investigation totals"></section>
+      <section class="case-heading"><div><div id="case-domain" class="eyebrow"></div><h2 id="case-title"></h2><p id="case-subtitle"></p></div><div class="case-code"><span>CASE SIGNAL</span><strong id="case-code"></strong></div></section>
+      <div class="workspace-toolbar"><div class="step-description"><span id="step-kicker" class="eyebrow"></span><h3 id="step-title"></h3></div><div class="toolbar-right"><label class="search-field"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Search logs or error codes" aria-label="Search logs and findings" autocomplete="off"></label><button id="export-btn" type="button" class="button secondary" disabled>Export JSON ↗</button></div></div>
+      <div id="stage-content" class="stage-content" aria-live="polite"></div>
+      <div class="workflow-actions"><div><span class="safe-dot"></span><span id="action-note">Choose a scenario, then load its sample logs.</span></div><div class="action-buttons"><button id="back-btn" type="button" class="button secondary" disabled>← Back</button><button id="next-btn" type="button" class="button primary">Load sample logs →</button></div></div>
+      <footer class="page-footer"><span>Windows Diagnostics <span class="footer-divider">/</span> Managed by Dibyendu</span><span>Suggestions only. Review one approved remediation at a time.</span></footer>
+      </div>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <dialog id="exec-detail" aria-labelledby="exec-dialog-title"><div class="exec-dialog-head"><div><div class="exec-kicker" id="exec-dialog-domain"></div><h2 id="exec-dialog-title">Finding details</h2></div><button id="exec-close-detail" class="exec-icon-btn" type="button" aria-label="Close finding details">✕</button></div><div id="exec-detail-content" class="exec-detail-body"></div></dialog>
+  <noscript><div class="noscript">Enable JavaScript to use this interactive demo. It runs entirely in your browser.</div></noscript>
+  <script type="module" src="./app.js"></script>
+  <script type="module" src="./executive.js"></script>
+</body>
+</html>
