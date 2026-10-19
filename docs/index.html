@@ -7,24 +7,24 @@
   <meta name="referrer" content="no-referrer">
   <title>Windows Diagnostics · Managed by Dibyendu</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230b827e'/%3E%3Cpath d='M10 12l4 16 6-11 6 11 4-16' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=1.4.0">
   <link rel="stylesheet" href="./executive.css">
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Demo scenarios">
+    <aside class="sidebar" aria-label="Diagnostics navigation">
       <a class="brand" href="./" aria-label="Windows Diagnostics home"><span class="brand-mark">W</span><span>WINDOWS<br><span class="brand-sub">DIAGNOSTICS</span></span></a>
       <p class="manager">Managed by Dibyendu</p>
       <nav class="exec-nav" aria-label="Workspace views"><button type="button" class="exec-nav-link active" data-exec-view="dashboard" aria-current="page"><span aria-hidden="true">▥</span> Executive dashboard</button><button type="button" class="exec-nav-link" data-exec-view="workflow"><span aria-hidden="true">⌁</span> Guided investigation</button></nav>
       <div id="scenario-group" hidden>
-      <div class="nav-heading">INVESTIGATION SCENARIOS</div>
+      <div id="workflow-cases-heading" class="nav-heading">SAMPLE INVESTIGATIONS</div>
       <nav id="scenario-nav" class="scenario-nav"></nav>
       </div>
       <div class="sidebar-bottom"><span class="small-label">EVIDENCE FIRST</span><p>Inspect. Correlate. Recommend.</p><div class="sidebar-rule"></div><span class="live-marker"><i></i> Read-only analysis</span><p class="sidebar-note" id="sidebar-data-mode">Synthetic records only.<br>No endpoint is connected.</p></div>
     </aside>
     <main id="main-content">
       <section id="executive-view" class="exec-view" aria-label="Executive dashboard">
-        <header class="exec-header"><div><div class="exec-kicker">WORKSPACE <span aria-hidden="true">/</span> EXECUTIVE OVERVIEW</div><h1>Endpoint intelligence<span style="color:var(--teal)">.</span></h1><p class="exec-subtitle">Turn diagnostic output into clear priorities and the evidence behind them.</p></div><div class="exec-actions"><span class="exec-top-badge">◈ Read-only</span><button type="button" class="exec-btn" id="exec-export">↗ Export brief</button><button type="button" class="exec-btn primary" id="exec-import" aria-describedby="exec-import-help">＋ Import CAB / logs</button></div></header>
+        <header class="exec-header"><div><div class="exec-kicker">WORKSPACE <span aria-hidden="true">/</span> EXECUTIVE OVERVIEW</div><h1>Endpoint intelligence<span style="color:var(--teal)">.</span></h1><p class="exec-subtitle">Turn diagnostic output into clear priorities and the evidence behind them.</p></div><div class="exec-actions"><button type="button" class="exec-btn" id="exec-investigate">⌁ Investigate evidence</button><span class="exec-top-badge">◈ Read-only</span><button type="button" class="exec-btn" id="exec-export">↗ Export brief</button><button type="button" class="exec-btn primary" id="exec-import" aria-describedby="exec-import-help">＋ Import CAB / logs</button></div></header>
         <p id="exec-import-help" class="exec-import-help"><strong>Select one CAB:</strong> supported readable logs are analyzed automatically, with coverage shown for every file. Also accepts .log, .txt, .json, .jsonl, .ndjson, .csv and Windows event .xml. Up to 20 selected files; CAB archives up to 100 MiB each, with 2,000 archive entries and 256 MiB expanded across the selection. Text logs up to 20 MiB each. Analysis stays in your browser; unsupported entries are listed in coverage.</p>
         <input id="exec-file-input" type="file" accept=".cab,.log,.txt,.json,.jsonl,.ndjson,.csv,.xml,application/vnd.ms-cab-compressed,text/plain,text/csv,application/json,application/xml,text/xml" aria-describedby="exec-import-help" multiple hidden>
         <div id="exec-data-banner" class="exec-data-banner"><div><span id="exec-data-label" class="exec-data-label">DEMONSTRATION DATA</span><p id="exec-data-note" class="exec-data-note">Four sample investigations. No device or tenant is connected.</p></div><label class="exec-filter"><span class="exec-sr-only">Dataset</span><select id="exec-dataset" aria-label="Dashboard dataset"><option value="sample">Sample reports</option><option value="imported" disabled>Imported reports</option></select></label></div>
@@ -40,7 +40,9 @@
       </section>
       <div id="workflow-view" hidden>
       <header class="page-header"><div><div class="eyebrow">DIAGNOSTICS WORKSPACE</div><h1>Follow the evidence.</h1><p>Walk through an investigation, from the first log to a suggested resolution.</p></div><span class="read-only"><span aria-hidden="true">◈</span> Read-only by design</span></header>
-      <div class="demo-banner"><span class="demo-tag">DEMO</span><span>Sample data · No connection to your PC or tenant · No changes are applied</span><button id="reset-btn" class="text-button" type="button">Reset walkthrough ↺</button></div>
+      <div class="workflow-data-controls"><label>Investigation dataset <select id="workflow-dataset" aria-label="Investigation dataset"><option value="sample">Sample reports</option><option value="imported" disabled>Imported reports</option></select></label><button id="workflow-import" type="button" class="button secondary">Import CAB / logs</button></div>
+      <div id="workflow-banner" class="demo-banner"><span id="workflow-tag" class="demo-tag">DEMO</span><span id="workflow-note">Sample data · No connection to your PC or tenant · No changes are applied</span><button id="reset-btn" class="text-button" type="button">Reset review ↺</button></div>
+      <div id="workflow-import-status" class="exec-import-status" role="status" hidden></div>
       <section class="workflow-panel" aria-label="Investigation workflow"><div id="stepper" class="stepper"></div></section>
       <section id="metrics" class="metrics" aria-label="Investigation totals"></section>
       <section class="case-heading"><div><div id="case-domain" class="eyebrow"></div><h2 id="case-title"></h2><p id="case-subtitle"></p></div><div class="case-code"><span>CASE SIGNAL</span><strong id="case-code"></strong></div></section>
@@ -54,7 +56,6 @@
   <div id="toast" class="toast" role="status" hidden></div>
   <dialog id="exec-detail" aria-labelledby="exec-dialog-title"><div class="exec-dialog-head"><div><div class="exec-kicker" id="exec-dialog-domain"></div><h2 id="exec-dialog-title">Finding details</h2></div><button id="exec-close-detail" class="exec-icon-btn" type="button" aria-label="Close finding details">✕</button></div><div id="exec-detail-content" class="exec-detail-body"></div></dialog>
   <noscript><div class="noscript">Enable JavaScript to use this interactive demo. It runs entirely in your browser.</div></noscript>
-  <script type="module" src="./app.js"></script>
-  <script type="module" src="./executive.js"></script>
+  <script type="module" src="./executive.js?v=1.4.0"></script>
 </body>
 </html>

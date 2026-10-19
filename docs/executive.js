@@ -1,5 +1,5 @@
 import { scenarios } from './scenarios.js';
-import { escapeHTML as e } from './app.js';
+import { escapeHTML as e, initWorkflow } from './app.js?v=1.4.0';
 import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js';
 import { readDiagnosticFiles } from './importer.js';
 
@@ -71,14 +71,26 @@ export function createExecutiveState() {
   return {mode:'sample',sample:sampleReports(scenarios),imported:[],archives:[],filters:{category:'all',severity:'all',from:'',to:'',query:''},busy:false};
 }
 
-function init() {
+export function initExecutive({readFiles=readDiagnosticFiles}={}) {
   const state=createExecutiveState();
+  const workflow=initWorkflow();
   const $=id=>document.getElementById(id);
   const reports=()=>state.mode==='sample'?state.sample:state.imported;
   let current=buildDashboard(reports());
   let searchTimer;
-  function showStatus(message,error=false){const status=$('exec-import-status');status.textContent=message;status.classList.toggle('error',error);status.hidden=false;}
+  function showStatus(message,error=false){for(const id of ['exec-import-status','workflow-import-status']){const status=$(id);status.textContent=message;status.classList.toggle('error',error);status.hidden=false;}}
   function datasetLabel(){return state.mode==='sample'?'Demonstration dataset':current.coverage.syntheticReports?'Imported sample / mixed report data':'Imported diagnostic reports';}
+  function syncWorkflow(){workflow.setReports(reports(),{mode:state.mode});for(const id of ['exec-dataset','workflow-dataset']){const select=$(id);select.options[1].disabled=!state.imported.length;select.options[1].textContent=`Imported reports (${state.imported.length})`;select.value=state.mode;}}
+  function changeDataset(mode){state.mode=mode;resetFilters();$('exec-import-status').hidden=true;$('workflow-import-status').hidden=true;syncWorkflow();render();}
+  function openInvestigation(reportId,findingId){
+    if(state.mode==='sample'){
+      const reportIndex=state.sample.findIndex(report=>report.id===reportId);
+      const sample=state.sample[reportIndex],scenario=scenarios[reportIndex];
+      const findingIndex=sample?.findings.findIndex(finding=>finding.id===findingId)??-1;
+      if(scenario)workflow.openReport(scenario.id,scenario.findings[findingIndex]?.id);
+    }else workflow.openReport(reportId,findingId);
+    $('exec-detail').close();setView('workflow');
+  }
   function setView(view){const dashboard=view==='dashboard';$('executive-view').hidden=!dashboard;$('workflow-view').hidden=dashboard;$('scenario-group').hidden=dashboard;document.querySelectorAll('[data-exec-view]').forEach(button=>{const active=button.dataset.execView===view;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});}
   function resetFilters(){state.filters={category:'all',severity:'all',from:'',to:'',query:''};for(const [key,id] of Object.entries({category:'exec-category',severity:'exec-severity',from:'exec-from',to:'exec-to',query:'exec-search'}))$(id).value=state.filters[key];}
   function render(){
@@ -116,26 +128,29 @@ function init() {
   function openFinding(id){
     const finding=current.priorityFindings.find(item=>item.id===id);if(!finding)return;
     $('exec-dialog-domain').textContent=finding.category.toUpperCase();$('exec-dialog-title').textContent=finding.title;
-    $('exec-detail-content').innerHTML=`<div class="exec-detail-meta">${badge(finding.severity)}<span class="exec-report-chip">${e(finding.reportLabel)}</span><span>Confidence: ${e(finding.confidence)}</span></div><section class="exec-detail-block"><div class="exec-detail-label">WHAT THE EVIDENCE SHOWS</div><p>${e(finding.summary||'No summary was supplied.')}</p></section><section class="exec-detail-block cause"><div class="exec-detail-label">LIKELY CAUSE / WHAT TO CONFIRM</div><p>${e(finding.rootCause||'A root cause was not established in this report.')}</p></section><section class="exec-detail-block"><div class="exec-detail-label">VERIFICATION CHECKS</div><ol class="exec-suggestion-list">${finding.checks.map(check=>`<li>${e(check)}</li>`).join('')||'<li>No verification checks were supplied.</li>'}</ol></section><section class="exec-detail-block"><div class="exec-detail-label">SUGGESTED RESOLUTION · NOT EXECUTED</div><ol class="exec-suggestion-list">${finding.recommendations.map(item=>`<li>${e(item)}</li>`).join('')||'<li>No resolution was supplied. Review the original report.</li>'}</ol></section><section class="exec-detail-block"><div class="exec-detail-label">LINKED EVIDENCE · ${finding.events.length} RECORDS IN THE CURRENT SCOPE</div>${finding.events.slice(0,40).map(event=>`<article class="exec-evidence-record"><div class="exec-evidence-meta"><strong>${e(event.source)}${event.line!==null?':'+event.line:''}</strong><span>${e(formatTime(event.timestamp))}</span></div><p class="exec-evidence-stage">${e(event.stage)} · ${e(event.context)}${event.codes.length?' · '+e(event.codes.join(', ')):''}</p><pre>${e(event.message)}</pre></article>`).join('')||'<p>No matching evidence records are available in the current filter. Review the original report and its import notices.</p>'}${finding.events.length>40?'<p>Showing the first 40 linked records. The original report contains the full evidence.</p>':''}</section><p class="exec-notice">Review one approved remediation at a time. This dashboard applies no changes and cannot confirm that an imported endpoint is healthy.</p>`;
+    $('exec-detail-content').innerHTML=`<button type="button" class="exec-btn" data-exec-investigate-report="${e(finding.reportId)}" data-exec-investigate-finding="${e(finding.id)}">⌁ Open in guided investigation</button><div class="exec-detail-meta">${badge(finding.severity)}<span class="exec-report-chip">${e(finding.reportLabel)}</span><span>Confidence: ${e(finding.confidence)}</span></div><section class="exec-detail-block"><div class="exec-detail-label">WHAT THE EVIDENCE SHOWS</div><p>${e(finding.summary||'No summary was supplied.')}</p></section><section class="exec-detail-block cause"><div class="exec-detail-label">LIKELY CAUSE / WHAT TO CONFIRM</div><p>${e(finding.rootCause||'A root cause was not established in this report.')}</p></section><section class="exec-detail-block"><div class="exec-detail-label">VERIFICATION CHECKS</div><ol class="exec-suggestion-list">${finding.checks.map(check=>`<li>${e(check)}</li>`).join('')||'<li>No verification checks were supplied.</li>'}</ol></section><section class="exec-detail-block"><div class="exec-detail-label">SUGGESTED RESOLUTION · NOT EXECUTED</div><ol class="exec-suggestion-list">${finding.recommendations.map(item=>`<li>${e(item)}</li>`).join('')||'<li>No resolution was supplied. Review the original report.</li>'}</ol></section><section class="exec-detail-block"><div class="exec-detail-label">LINKED EVIDENCE · ${finding.events.length} RECORDS IN THE CURRENT SCOPE</div>${finding.events.slice(0,40).map(event=>`<article class="exec-evidence-record"><div class="exec-evidence-meta"><strong>${e(event.source)}${event.line!==null?':'+event.line:''}</strong><span>${e(formatTime(event.timestamp))}</span></div><p class="exec-evidence-stage">${e(event.stage)} · ${e(event.context)}${event.codes.length?' · '+e(event.codes.join(', ')):''}</p><pre>${e(event.message)}</pre></article>`).join('')||'<p>No matching evidence records are available in the current filter. Review the original report and its import notices.</p>'}${finding.events.length>40?'<p>Showing the first 40 linked records. The original report contains the full evidence.</p>':''}</section><p class="exec-notice">Review one approved remediation at a time. This dashboard applies no changes and cannot confirm that an imported endpoint is healthy.</p>`;
     $('exec-detail').showModal();
   }
   async function importFiles(files){
     if(!files.length||state.busy)return;
-    state.busy=true;$('exec-import').disabled=true;$('exec-dataset').disabled=true;$('exec-export').disabled=true;showStatus('Reading logs and analyzing evidence locally in this browser…');
+    state.busy=true;$('exec-import').disabled=true;$('workflow-import').disabled=true;$('workflow-dataset').disabled=true;$('exec-dataset').disabled=true;$('exec-export').disabled=true;showStatus('Reading logs and analyzing evidence locally in this browser…');
     try{
-      const {reports:imported,errors,notices,archives=[]}=await readDiagnosticFiles(files);
+      const {reports:imported,errors,notices,archives=[]}=await readFiles(files);
       state.archives=archives;
-      if(imported.length){state.imported=[...new Map(imported.map(report=>[report.id,report])).values()];state.mode='imported';$('exec-dataset').options[1].disabled=false;$('exec-dataset').options[1].textContent=`Imported reports (${state.imported.length})`;$('exec-dataset').value='imported';resetFilters();}
+      if(imported.length){state.imported=[...new Map(imported.map(report=>[report.id,report])).values()];state.mode='imported';resetFilters();syncWorkflow();}
       render();
       const eventCount=imported.reduce((sum,report)=>sum+report.events.length,0),findingCount=imported.reduce((sum,report)=>sum+report.findings.length,0);
       const message=imported.length?`${number(eventCount)} evidence records and ${number(findingCount)} findings loaded in ${state.imported.length} report${state.imported.length===1?'':'s'}. Files stay in this browser session; nothing is uploaded.`:'No readable logs or valid reports were loaded. Your current dataset is unchanged.';
       showStatus([message,archives.length?'CAB file coverage is listed below, including skipped or failed entries.':'',...notices,...errors].filter(Boolean).join(' '),errors.length>0||archives.some(archive=>!archive.complete));
     }catch(error){showStatus(`${sanitizeText(error.message)} Your current dataset is unchanged.`,true);
-    }finally{state.busy=false;$('exec-import').disabled=false;$('exec-dataset').disabled=false;$('exec-export').disabled=!reports().length&&!state.archives.length;$('exec-file-input').value='';}
+    }finally{state.busy=false;$('exec-import').disabled=false;$('workflow-import').disabled=false;$('workflow-dataset').disabled=false;$('exec-dataset').disabled=false;$('exec-export').disabled=!reports().length&&!state.archives.length;$('exec-file-input').value='';}
   }
   $('exec-import').addEventListener('click',()=>$('exec-file-input').click());
+  $('workflow-import').addEventListener('click',()=>$('exec-file-input').click());
+  $('exec-investigate').addEventListener('click',()=>setView('workflow'));
   $('exec-file-input').addEventListener('change',event=>importFiles([...event.target.files]));
-  $('exec-dataset').addEventListener('change',event=>{state.mode=event.target.value;resetFilters();$('exec-import-status').hidden=true;render();});
+  $('exec-dataset').addEventListener('change',event=>changeDataset(event.target.value));
+  $('workflow-dataset').addEventListener('change',event=>changeDataset(event.target.value));
   $('exec-category').addEventListener('change',event=>updateFilter('category',event.target.value));
   $('exec-severity').addEventListener('change',event=>updateFilter('severity',event.target.value));
   function changeDates(){const from=$('exec-from').value,to=$('exec-to').value;if(from&&to&&from>to){showStatus('The start date must be on or before the end date. The previous filter remains active.',true);return;}state.filters.from=from;state.filters.to=to;$('exec-import-status').hidden=true;render();}
@@ -145,9 +160,10 @@ function init() {
   $('exec-all-domains').addEventListener('click',()=>updateFilter('category','all'));
   $('exec-close-detail').addEventListener('click',()=>$('exec-detail').close());
   $('exec-detail').addEventListener('click',event=>{if(event.target===$('exec-detail')){const bounds=$('exec-detail').getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)$('exec-detail').close();}});
-  document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.execView)setView(button.dataset.execView);else if(button.dataset.execCategory)updateFilter('category',button.dataset.execCategory);else if(button.dataset.execSeverity)updateFilter('severity',state.filters.severity===button.dataset.execSeverity?'all':button.dataset.execSeverity);else if(button.dataset.execFinding)openFinding(button.dataset.execFinding);});
+  document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.execInvestigateReport)openInvestigation(button.dataset.execInvestigateReport,button.dataset.execInvestigateFinding);else if(button.dataset.execView)setView(button.dataset.execView);else if(button.dataset.execCategory)updateFilter('category',button.dataset.execCategory);else if(button.dataset.execSeverity)updateFilter('severity',state.filters.severity===button.dataset.execSeverity?'all':button.dataset.execSeverity);else if(button.dataset.execFinding)openFinding(button.dataset.execFinding);});
   $('exec-export').addEventListener('click',()=>{const blob=new Blob([executiveBrief(current,datasetLabel(),state.archives)],{type:'text/html;charset=utf-8'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=`windows-diagnostics-executive-brief${state.mode==='sample'?'-sample':''}.html`;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showStatus('Executive brief downloaded. Review redaction and scope before sharing. No endpoint changes were applied.');});
   setView('dashboard');render();
+  return {state,workflow,importFiles,setView};
 }
 
-if(typeof document!=='undefined')init();
+if(typeof document!=='undefined')initExecutive();
