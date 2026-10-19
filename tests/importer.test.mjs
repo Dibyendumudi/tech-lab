@@ -91,7 +91,7 @@ test('binary archives and native event traces get actionable errors, including r
   ]);
   assert.equal(result.reports.length, 0);
   assert.equal(result.errors.length, 5);
-  assert.ok(result.errors[0].includes('Extract'));
+  assert.match(result.errors[0], /CAB|cabinet/i);
   assert.ok(result.errors[1].includes('JSON/XML'));
   assert.ok(result.errors[3].includes('binary'));
 });
@@ -149,7 +149,7 @@ test('oversized selections fail before reading files', async () => {
   await assert.rejects(() => importDiagnosticFiles([fake]), /20 MiB/);
   await assert.rejects(() => importDiagnosticFiles(Array.from({ length: 21 }, () => ({ ...fake, size: 1 }))), /20 log files/);
   assert.equal(reads, 0);
-  assert.deepEqual(await importDiagnosticFiles([]), { reports: [], errors: [], notices: [] });
+  assert.deepEqual(await importDiagnosticFiles([]), { reports: [], errors: [], notices: [], archives: [] });
 });
 
 test('the no-Worker fallback and actual picker share the supported format contract', async () => {
@@ -158,6 +158,6 @@ test('the no-Worker fallback and actual picker share the supported format contra
   const html = readFileSync(new URL('../docs/index.html', import.meta.url), 'utf8');
   const accept = /id="exec-file-input"[^>]+accept="([^"]+)"/.exec(html)?.[1] || '';
   for (const ext of IMPORT_EXTENSIONS) assert.ok(accept.split(',').includes(ext), ext);
-  assert.ok(html.includes('Import logs / reports'));
-  assert.ok(html.includes('CAB, EVTX and ETL'));
+  assert.ok(html.includes('Import CAB / logs'));
+  assert.ok(html.includes('Select one CAB'));
 });

@@ -6,9 +6,11 @@ Managed by Dibyendu. The browser dashboard is in `docs/`; the Windows desktop ap
 
 Open the [Windows Diagnostics dashboard](https://dibyendumudi.github.io/tech-lab/). 
 
-Start with the demonstration data, or choose **Import logs / reports** to analyze `.log`, `.txt`, `.json`, `.jsonl`, `.ndjson`, `.csv`, or Windows event `.xml` exports directly in your browser on macOS or Windows. Existing Windows Diagnostics JSON reports also work. UTF-8 and UTF-16 text are supported; select at most 20 files, 20 MiB each and 50 MiB combined.
+Start with the demonstration data, or choose **Import CAB / logs** to select a single Windows diagnostic `.cab`. The browser opens the archive and analyzes supported readable entries together; you do not need to extract or select each member. CAB member counts are separate from the 20 selected-file limit. The persistent **Latest CAB import coverage** table lists every entry, record count, skipped/failed source and reason. Coverage is also included in **Export brief**.
 
-Raw logs are analyzed together into one investigation with linked evidence and suggested checks. Existing report exports keep their supplied findings. CAB archives need extraction first; binary EVTX and ETL require conversion with Windows tools. Arbitrary JSON, CSV or XML documents are not diagnostic records. Choose **Export brief** to download an executive summary.
+Direct `.log`, `.txt`, `.json`, `.jsonl`, `.ndjson`, `.csv`, Windows event `.xml`, and existing Windows Diagnostics JSON reports also work on macOS and Windows. UTF-8 and UTF-16 text are supported. Limits: 100 MiB per CAB, with 2,000 members and 256 MiB expanded across selected CABs; readable files are capped at 20 MiB each. Selections with CABs are capped at 150 MiB combined; other selections at 50 MiB. Raw analysis includes up to 50,000 records, with partial-source notices when capped.
+
+Raw logs are analyzed together into one investigation with linked evidence and suggested checks. Existing report exports keep their supplied findings. Binary EVTX/ETL, nested archives, HTML reports, registry dumps and other unsupported entries are listed in CAB coverage rather than treated as analyzed. Arbitrary JSON, CSV or XML documents are not diagnostic records. Selecting a CAB does not guarantee that its diagnostic evidence is fully supported or complete.
 
 Selected files are read locally in browser memory and are not uploaded or stored by the site. Redaction is best-effort: review evidence and exports before sharing. Do not commit real diagnostic logs to this public repository. Reloading the page clears imported evidence.
 

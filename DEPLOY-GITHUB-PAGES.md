@@ -24,6 +24,11 @@ docs/
   import-worker.js
   raw-parsers.js
   raw-analysis.js
+  cab-format.js
+  cab-extractor.js
+  vendor/
+    libarchive/
+      (local decoder JavaScript, WebAssembly and license notices)
   styles.css
   executive.css
 .github/
@@ -99,18 +104,28 @@ itself does not require a ChatGPT account or an application sign-in.
 ## Use the dashboard
 
 The default dataset consists of synthetic demonstration reports. To display
-diagnostic output, choose **Import logs / reports**. Readable `.log`, `.txt`,
+diagnostic output, choose **Import CAB / logs**. A single `.cab` is opened locally
+and its supported readable entries analyzed automatically. There is no need to
+extract or select archive members one at a time. Readable `.log`, `.txt`,
 `.json`, `.jsonl`, `.ndjson`, `.csv`, and Windows event `.xml` exports can be
 analyzed directly in a macOS or Windows browser, together with JSON reports
 from the Windows Diagnostics desktop app. UTF-8 and UTF-16 text are supported.
-Select up to 20 files, at most 20 MiB each and 50 MiB combined. Use **Export brief**
-for an executive summary of the selected data.
+Select up to 20 files. CAB limits are 100 MiB compressed per archive, 2,000 entries
+and 256 MiB expanded across selected cabinets; archive members do not count as selected files. Text files are capped
+at 20 MiB each. Selections containing CABs are capped at 150 MiB combined; other
+selections at 50 MiB. Use **Export brief** for an executive summary and the full
+archive coverage inventory.
 
 JSON/CSV/XML files must contain diagnostic event or Entra sign-in fields.
-CAB archives need extraction first; binary EVTX and ETL need conversion with
-Windows tools. Raw imports are combined into one investigation (up to 50,000
+CAB extraction and local decoding use bundled assets under `docs/vendor/`.
+Do not omit the WebAssembly or license files when copying/deploying the website.
+Binary EVTX and ETL, nested archives and unsupported report/configuration files
+are listed as skipped; they are not silently counted as analyzed. Multipart
+or invalid cabinets are rejected with a visible reason. Raw imports are combined into one investigation (up to 50,000
 records); existing reports keep their supplied findings. Any record truncation,
 unreadable files or skipped JSONL lines are reported in import/source notices.
+The archive file-by-file inventory remains visible independently of chart
+filters and transient status messages, including when no records were loaded.
 
 Imported reports are processed in memory in the browser session and are not
 uploaded by this application. Reloading the page clears them. The host still
