@@ -40,13 +40,18 @@ export function sanitizeText(value) {
   return str(value)
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, '[redacted bearer token]')
     .replace(/\bBasic\s+[A-Za-z0-9+/=]+/gi, '[redacted basic credentials]')
-    .replace(/\b(authorization|password|passwd|client[_ -]?secret|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|token|secret|sig)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi, '$1=[redacted]')
+    .replace(/(["']?\b(?:authorization|password|passwd|pwd|client[_ -]?secret|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|token|secret|sig)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|[^\s,;}]+)/gi, '$1[redacted]')
+    .replace(/(["']?\b(?:correlation[ _-]?id|request[ _-]?id|session[ _-]?id|activity[ _-]?id|related[ _-]?activity[ _-]?id|device[ _-]?(?:id|name)|tenant[ _-]?id|app(?:lication)?[ _-]?id|object[ _-]?id|user[ _-]?(?:id|name|display[ _-]?name|principal[ _-]?name)|upn|account[ _-]?name|computer(?:[ _-]?name)?|machine[ _-]?name|hostname|serial[ _-]?number|hardware[ _-]?hash|display[ _-]?name|service[ _-]?principal[ _-]?id)["']?\s*[:=]\s*)(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|([^\s,;}]+))/gi, (match, prefix, quoted, single, bare) => {
+      let original = quoted ?? single ?? bare;
+      if (quoted !== undefined) { try { original = JSON.parse('"' + quoted + '"'); } catch { /* Keep the bounded literal if it is not a JSON string. */ } }
+      return original.startsWith('[') || /^(?:true|false|null|none|unknown|n\/a)$/i.test(original) ? match : prefix + pseudonym('id', original);
+    })
     .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[redacted token]')
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, value => pseudonym('email', value))
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, value => pseudonym('id', value))
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, value => value.split('.').every(part => Number(part) <= 255) ? pseudonym('ip', value) : value)
     .replace(/(?<![\w:])(?:[0-9a-f]{1,4}:){4,}[0-9a-f:]*|(?<![\w:])(?:[0-9a-f]{1,4}:)*:[0-9a-f:]*:[0-9a-f:]+/gi, value => pseudonym('ip', value))
-    .replace(/(\b[A-Z]:\\Users\\)([^\\\s]+)/gi, (_, prefix, user) => prefix + pseudonym('user', user));
+    .replace(/(\b[A-Z]:[\\/]Users[\\/]|\/(?:Users|home)\/)([^\\/\s"'<>]+)/gi, (match, prefix, user) => user.startsWith('[') ? match : prefix + pseudonym('user', user));
 }
 function textList(value) {
   return Array.isArray(value) ? value.filter(item => typeof item === 'string').slice(0, 1000).map(sanitizeText) : [];
@@ -127,7 +132,7 @@ export function parseReport(raw, label = 'Imported report') {
       message: sanitizeText(event.message), line: Number.isSafeInteger(event.line) && event.line >= 0 ? event.line : null,
       codes: textList(Array.isArray(event.codes) ? event.codes : typeof event.code === 'string' ? [event.code] : []),
       stage: STAGES.includes(stage) ? stage : 'unknown', context: sanitizeText(event.context) || 'Unknown',
-      correlationIds: textList(Array.isArray(event.correlation_ids) ? event.correlation_ids : Array.isArray(event.correlationIds) ? event.correlationIds : typeof event.correlationId === 'string' ? [event.correlationId] : [])
+      correlationIds: textList(Array.isArray(event.correlation_ids) ? event.correlation_ids : Array.isArray(event.correlationIds) ? event.correlationIds : typeof event.correlationId === 'string' ? [event.correlationId] : []).map(value => value.startsWith('[') ? value : pseudonym('id', value))
     };
   });
   let orphanCount = 0, unknownSeverityCount = 0;

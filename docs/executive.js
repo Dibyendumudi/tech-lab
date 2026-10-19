@@ -1,6 +1,7 @@
 import { scenarios } from './scenarios.js';
 import { escapeHTML as e } from './app.js';
 import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js';
+import { readDiagnosticFiles } from './importer.js';
 
 const COLORS = { error: '#bc6871', warning: '#d6ab61', info: '#769ab7' };
 const LABELS = { error: 'Error / high / critical', warning: 'Warning / medium', info: 'Informational / low' };
@@ -104,23 +105,14 @@ function init() {
   }
   async function importFiles(files){
     if(!files.length||state.busy)return;
-    if(files.length>20){showStatus('Select at most 20 JSON diagnostic reports at a time.',true);return;}
-    if(files.some(file=>file.size>20*1024*1024)||files.reduce((sum,file)=>sum+file.size,0)>50*1024*1024){showStatus('Import limit: 20 MiB per report and 50 MiB per selection. Export a narrower diagnostic window.',true);return;}
-    state.busy=true;$('exec-import').disabled=true;$('exec-dataset').disabled=true;$('exec-export').disabled=true;showStatus('Reading and summarizing reports locally in this browser…');
-    const imported=[],errors=[];let eventCount=0,findingCount=0;
+    state.busy=true;$('exec-import').disabled=true;$('exec-dataset').disabled=true;$('exec-export').disabled=true;showStatus('Reading logs and analyzing evidence locally in this browser…');
     try{
-      for(const file of files){
-        const label=sanitizeText(file.name);
-        try{
-          let raw;try{raw=JSON.parse(await file.text());}catch{throw new Error('Invalid JSON. Choose a JSON report exported by Windows Diagnostics.');}
-          const report=parseReport(raw,label);
-          if(eventCount+report.events.length>100000||findingCount+report.findings.length>3000)throw new Error('Selection exceeds 100,000 evidence records or 3,000 findings. Import a narrower report set.');
-          imported.push(report);eventCount+=report.events.length;findingCount+=report.findings.length;
-        }catch(error){errors.push(`${label}: ${sanitizeText(error.message)}`);}
-      }
+      const {reports:imported,errors,notices}=await readDiagnosticFiles(files);
       if(imported.length){state.imported=[...new Map(imported.map(report=>[report.id,report])).values()];state.mode='imported';$('exec-dataset').options[1].disabled=false;$('exec-dataset').options[1].textContent=`Imported reports (${state.imported.length})`;$('exec-dataset').value='imported';resetFilters();render();}
-      const message=imported.length?`${state.imported.length} report${state.imported.length===1?'':'s'} loaded locally. Files are not uploaded or retained after this session.`:'No valid diagnostic reports were loaded. Your current dataset is unchanged.';
-      showStatus(message+(errors.length?' '+errors.join(' '):''),errors.length>0);
+      const eventCount=imported.reduce((sum,report)=>sum+report.events.length,0),findingCount=imported.reduce((sum,report)=>sum+report.findings.length,0);
+      const message=imported.length?`${number(eventCount)} evidence records and ${number(findingCount)} findings loaded in ${state.imported.length} report${state.imported.length===1?'':'s'}. Files stay in this browser session; nothing is uploaded.`:'No readable logs or valid reports were loaded. Your current dataset is unchanged.';
+      showStatus([message,...notices,...errors].join(' '),errors.length>0);
+    }catch(error){showStatus(`${sanitizeText(error.message)} Your current dataset is unchanged.`,true);
     }finally{state.busy=false;$('exec-import').disabled=false;$('exec-dataset').disabled=false;$('exec-export').disabled=!reports().length;$('exec-file-input').value='';}
   }
   $('exec-import').addEventListener('click',()=>$('exec-file-input').click());

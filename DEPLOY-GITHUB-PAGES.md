@@ -20,6 +20,10 @@ docs/
   scenarios.js
   analytics.js
   executive.js
+  importer.js
+  import-worker.js
+  raw-parsers.js
+  raw-analysis.js
   styles.css
   executive.css
 .github/
@@ -28,7 +32,7 @@ docs/
 DEPLOY-GITHUB-PAGES.md
 ```
 
-The seven dashboard files are unchanged copies of the existing static site.
+The dashboard files and local import worker are in `docs/`.
 Their relative asset and module URLs support the `/tech-lab/` project path.
 There are no application secrets, dependencies to install, or build commands.
 The existing repository README and desktop ZIP are not replaced.
@@ -95,9 +99,18 @@ itself does not require a ChatGPT account or an application sign-in.
 ## Use the dashboard
 
 The default dataset consists of synthetic demonstration reports. To display
-diagnostic output, choose **Import report** and select JSON exports produced by
-the Windows Diagnostics desktop app. Use **Export brief** for an executive
-summary of the selected data.
+diagnostic output, choose **Import logs / reports**. Readable `.log`, `.txt`,
+`.json`, `.jsonl`, `.ndjson`, `.csv`, and Windows event `.xml` exports can be
+analyzed directly in a macOS or Windows browser, together with JSON reports
+from the Windows Diagnostics desktop app. UTF-8 and UTF-16 text are supported.
+Select up to 20 files, at most 20 MiB each and 50 MiB combined. Use **Export brief**
+for an executive summary of the selected data.
+
+JSON/CSV/XML files must contain diagnostic event or Entra sign-in fields.
+CAB archives need extraction first; binary EVTX and ETL need conversion with
+Windows tools. Raw imports are combined into one investigation (up to 50,000
+records); existing reports keep their supplied findings. Any record truncation,
+unreadable files or skipped JSONL lines are reported in import/source notices.
 
 Imported reports are processed in memory in the browser session and are not
 uploaded by this application. Reloading the page clears them. The host still
@@ -125,7 +138,7 @@ resolution steps without executing repairs, deletions, or configuration changes.
 - **Website returns 404:** check the workflow result and the URL in Pages
   settings. The project path is `/tech-lab/`; the repository URL ending in `.git`
   is a source URL, not the website.
-- **Files look unstyled or modules fail:** ensure all seven browser files are
+- **Files look unstyled or modules fail:** ensure all browser files are
   together under `docs/`. Preserve their relative paths and open the site over
   HTTPS, rather than double-clicking `index.html` locally.
 
