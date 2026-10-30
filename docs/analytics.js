@@ -142,10 +142,10 @@ export function parseReport(raw, label = 'Imported report') {
     if (findingIds.has(originId)) schemaError('Duplicate finding IDs are not supported in one report.');
     findingIds.add(originId);
     const refs = Array.isArray(finding.evidence) ? finding.evidence : Array.isArray(finding.evidenceIds) ? finding.evidenceIds : [];
-    const evidenceIds = [];
+    const evidenceIds = [], seenEvidence = new Set();
     for (const ref of refs) {
       if (typeof ref !== 'string' || !eventIds.has(ref)) orphanCount++;
-      else if (!evidenceIds.includes(eventIds.get(ref))) evidenceIds.push(eventIds.get(ref));
+      else if (!seenEvidence.has(eventIds.get(ref))) { seenEvidence.add(eventIds.get(ref)); evidenceIds.push(eventIds.get(ref)); }
     }
     if (!['critical', 'high', 'error', 'warning', 'warn', 'medium', 'moderate', 'info', 'information', 'informational', 'low'].includes(str(finding.severity).toLowerCase())) unknownSeverityCount++;
     return {
@@ -153,6 +153,7 @@ export function parseReport(raw, label = 'Imported report') {
       category: normalizeCategory(finding.category ?? scenario.category), severity: normalizeSeverity(finding.severity),
       confidence: sanitizeText(finding.confidence) || 'Unknown', summary: sanitizeText(finding.summary ?? finding.observation),
       rootCause: sanitizeText(finding.root_cause ?? finding.rootCause), evidenceIds,
+      diagnosis: {type: ['rule','unclassified'].includes(finding.diagnosis?.type) ? finding.diagnosis.type : 'provided', ruleId: sanitizeText(finding.diagnosis?.rule_id ?? finding.diagnosis?.ruleId)},
       checks: textList(finding.checks), recommendations: textList(finding.recommendations)
     };
   });

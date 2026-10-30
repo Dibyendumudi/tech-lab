@@ -1,4 +1,4 @@
-import { importDiagnosticFiles } from './importer.js';
+import { importDiagnosticFiles } from './importer.js?v=1.5.0';
 
 self.onmessage = async event => {
   try { self.postMessage({ result: await importDiagnosticFiles(event.data.files) }); }

@@ -1,5 +1,6 @@
 /** Local observations from imported text exports. Never executes a resolution. */
-import { CATEGORIES, sanitizeText } from './analytics.js';
+import { CATEGORIES, sanitizeText } from './analytics.js?v=1.5.0';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js';
 
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;
@@ -31,14 +32,27 @@ function hash(value) {
 }
 const has = (event, pattern) => pattern.test(event.message);
 const code = (event, value) => event.codes.some(item => item.toLowerCase() === value.toLowerCase());
+function signalText(message) {
+  return message
+    .replace(/["'](error(?:code)?|failure(?:reason)?|failed|exception|warning|warn)["']\s*:\s*(?:null|false|0|"(?:0x0+|0|none|no error|success)?")(?=\s*[,}])/gi, ' ')
+    .replace(/\b(?:no errors?|no failures?|without errors?|without failures?|not failed|not blocked|not denied)\b/gi, ' ')
+    .replace(/\b(?:errors?|error\s*code|failed|failures?|warnings?)\s*[=:]\s*["']?(?:false|0x0+|0)["']?\b/gi, ' ');
+}
+function configurationOnly(event) {
+  return /\b(?:configured (?:return|exit|error) codes?|(?:return|exit|error)[ -]code mappings?|configuration mappings?)\b/i.test(event.message) && !/\b(?:returned|exited|completed with|process exit|execution result|installation failed)\b/i.test(event.message);
+}
 function successOnly(event) {
-  const message = event.message;
-  const success = /\b(?:no errors?|no failures?|successful|successfully|succeeded)\b|"succeeded"\s*:\s*true/i.test(message);
-  return success && !/\b(?:failed|failure|not successful)\b/i.test(message) && !/\berror code\s*[=:]?\s*(?!0(?:x0+)?\b)(?:0x[0-9a-f]+|[1-9]\d*)\b/i.test(message);
+  const message = event.message, signals = signalText(message);
+  const success = /\b(?:no errors?|no failures?|successful|successfully|succeeded)\b|"(?:status|result)"\s*:\s*"(?:success|succeeded)"|"succeeded"\s*:\s*true|["']?error\s*code["']?\s*[:=]\s*["']?(?:0x0+|0)["']?\b/i.test(message);
+  return success && !/\b(?:failed|failure|exception|fatal|denied|blocked|not successful)\b/i.test(signals) && !event.codes.some(value => /^0x[89a-f][a-f0-9]{7}$/i.test(value) || /^AADSTS/i.test(value));
+}
+function normalizedCodeFields(message) {
+  return message.replace(/["'](HRESULT|error\s*code|result\s*code|return\s*code|exit\s*code|lpExitCode)["']\s*:\s*["']?(-?(?:0x[0-9a-f]+|\d+))["']?/gi, '$1=$2');
 }
 function installerResult(event, value) {
-  if (/\b(?:configured|configuration|mapping|mappings|return codes)\b/i.test(event.message) && !/\b(?:returned|exited|completed with|process exit|execution result)\b/i.test(event.message)) return false;
-  return new RegExp('\\b(?:lpExitCode|exit\\s*(?:code)?|return(?:ed)?\\s*(?:code)?|msi\\s*(?:error|code)|installer\\s*(?:error|code|returned)|installer exited with code)\\s*(?:is\\b|was\\b|equals\\b|[=:])?\\s*' + value + '\\b', 'i').test(event.message);
+  const message = normalizedCodeFields(event.message);
+  if (/\b(?:configured (?:return|exit|error) codes?|(?:return|exit|error)[ -]code mappings?|configuration mappings?)\b/i.test(event.message) && !/\b(?:returned|exited|completed with|process exit|execution result)\b/i.test(event.message)) return false;
+  return new RegExp('\\b(?:lpExitCode|error\\s*code|exit\\s*(?:code)?|return(?:ed)?\\s*(?:code)?|msi\\s*(?:error|code)|installer\\s*(?:error|code|returned)|installer exited with code)\\s*(?:is\\b|was\\b|equals\\b|[=:])?\\s*' + value + '\\b', 'i').test(message);
 }
 function inferCategory(event) {
   if (CATEGORIES.includes(event.category) && event.category !== 'Enterprise') return event.category;
@@ -48,10 +62,10 @@ function inferCategory(event) {
   if (/\baadsts\d+\b/.test(all)) return 'Conditional Access';
   if (/appworkload|intunemanagementextension|appactionprocessor/.test(source)) return 'Win32 apps';
   if (/conditional.?access|sign.?in|\bentra\b/.test(all)) return 'Conditional Access';
-  if (/autopilot|enrollment status page|\besp\b|moderndeployment|provisioning-diagnostics|tpm attestation/.test(all)) return 'Autopilot & ESP';
+  if (/autopilot|enrollment status page|\besp\b|moderndeployment|provisioning-diagnostics|tpm attestation|0x80180014|0x80180018/.test(all)) return 'Autopilot & ESP';
   if (/windowsupdate|windows update|updateorchestrator|cbs\.log|\bservicing\b|update ring|0x800f081f|0x800f0831|0x8024402c/.test(all)) return 'Windows patching';
   if (/\bwin32\b|\bmsiexec\b|\bmsi\b|0x87d1041c|detection rule/.test(all)) return 'Win32 apps';
-  if (/enroll(?:ment|ing)\b.{0,100}\b(?:failed|failure|error)/.test(all)) return 'Autopilot & ESP';
+  if (/enroll(?:ment|ing)\b.{0,100}\b(?:failed|failure|error)|\b(?:failed|failure|error)\b.{0,80}\benroll(?:ment|ing)?\b/.test(all)) return 'Autopilot & ESP';
   return 'Enterprise';
 }
 function inferStage(message) {
@@ -67,8 +81,12 @@ function inferContext(message) {
   return system && user ? 'mixed' : system ? 'SYSTEM' : user ? 'User' : 'unknown';
 }
 function extractCodes(message) {
+  message = normalizedCodeFields(message);
   const codes = Array.from(message.matchAll(/\b(?:0x[0-9a-f]{8}|AADSTS\d{5,8})\b/gi), match => /^aadsts/i.test(match[0]) ? match[0].toUpperCase() : match[0].toLowerCase());
-  for (const match of message.matchAll(/\b(?:lpExitCode|exit\s*(?:code)?|return(?:ed)?\s*(?:code)?|installer\s*(?:error|code)|msi\s*(?:error|code))\s*(?:is\b|was\b|equals\b|[=:])?\s*(1603|1618|3010|1641)\b/gi)) codes.push(match[1]);
+  for (const match of message.matchAll(/\b(?:lpExitCode|error\s*code|exit\s*(?:code)?|return(?:ed)?\s*(?:code)?|installer\s*(?:error|code)|msi\s*(?:error|code))\s*(?:is\b|was\b|equals\b|[=:])?\s*(1603|1618|1619|1620|1625|1638|3010|1641)\b/gi)) codes.push(match[1]);
+  for (const match of message.matchAll(/\b(?:lpExitCode|exit\s*code|return(?:ed)?\s*code|error\s*code)\s*(?:is\b|was\b|equals\b|[=:])?\s*(\d{1,5})\b/gi)) {
+    if (Number(match[1]) > 0 && Number(match[1]) <= 65535) codes.push(String(Number(match[1])));
+  }
   for (const match of message.matchAll(/\b(?:HRESULT|(?:error|result|return|exit)\s*code|lpExitCode)\s*(?:is\b|was\b|equals\b|[=:])?\s*(-?\d{6,10})\b/gi)) {
     const value = Number(match[1]);
     if ((value >= -2147483648 && value < 0) || (value > 65535 && value <= 4294967295)) codes.push('0x' + (value >>> 0).toString(16).padStart(8, '0'));
@@ -138,7 +156,7 @@ rule('patch-restart', 'Windows patching', 'Update is waiting for a restart', e =
   'An update-related restart requirement is explicitly recorded. It is not proof of an update download or installation failure.',
   ['Review installation status, recorded boot time, effective restart deadline and active hours.'],
   ['Plan a restart through the existing approved process if needed; this app does not restart devices.'], 'info', 'high');
-rule('patch-policy', 'Windows patching', 'Update policy or deadline issue recorded', e => has(e, /\b(?:policy|update ring|deadline)\b.{0,100}\b(?:failed|failure|not received|not applied|conflict|expired|overdue|missed)\b/i) && !successOnly(e),
+rule('patch-policy', 'Windows patching', 'Update policy or deadline issue recorded', e => has(e, /\b(?:policy|update ring|deadline)\b.{0,100}\b(?:failed|failure|not received|not applied|conflict|expired|overdue|missed)\b|\b(?:failed|failure|not received|not applied|conflict|expired|overdue|missed)\b.{0,100}\b(?:policy|update ring|deadline)\b/i) && !successOnly(e),
   'The log explicitly records a policy, conflict or deadline issue. Local evidence does not establish all assigned rings or tenant policy precedence.',
   ['Compare assignment, MDM delivery, effective policy, deadlines and execution/result timestamps.'],
   ['Prepare one policy or scheduling recommendation after effective settings are verified.']);
@@ -165,11 +183,11 @@ rule('autopilot-esp', 'Autopilot & ESP', 'Enrollment Status Page timeout recorde
   'ESP exceeded a recorded wait/time limit. A timeout is a symptom; identify the blocking app, policy or enrollment phase before assigning a root cause.',
   ['Identify the ESP phase and blocking app IDs, then trace assignment, dependency, execution, detection and exit-code evidence.'],
   ['Propose one change for the confirmed blocker and validate in a controlled deployment; do not bypass ESP.']);
-rule('autopilot-enrollment', 'Autopilot & ESP', 'MDM enrollment failure recorded', e => has(e, /\b(?:mdm )?enroll(?:ment|ing)\b.{0,100}\b(?:failed|failure|error|denied|blocked)\b/i) && !successOnly(e),
+rule('autopilot-enrollment', 'Autopilot & ESP', 'MDM enrollment failure recorded', e => has(e, /\b(?:mdm )?enroll(?:ment|ing)\b.{0,100}\b(?:failed|failure|error|denied|blocked)\b|\b(?:failed|failure|error|denied|blocked)\b.{0,80}\benroll(?:ment|ing)?\b/i) && !successOnly(e),
   'Enrollment explicitly failed. Scope, permissions, restrictions, licensing and connectivity remain hypotheses unless the accompanying error establishes them.',
   ['Review the first enrollment code, MDM event, profile timestamp, restrictions and intended identity.'],
   ['Prepare a recommendation for the confirmed enrollment error while preserving registration and settings.']);
-rule('autopilot-profile', 'Autopilot & ESP', 'Autopilot profile or registration issue recorded', e => has(e, /\b(?:profile|hardware hash|registration)\b[^.;\n]{0,100}\b(?:not assigned|not found|not received|missing|duplicate|failed|failure)\b/i) && !successOnly(e),
+rule('autopilot-profile', 'Autopilot & ESP', 'Autopilot profile or registration issue recorded', e => has(e, /\b(?:profile|hardware hash|registration)\b[^.;\n]{0,100}\b(?:not assigned|not found|not received|missing|duplicate|failed|failure)\b|\b(?:not assigned|not found|not received|missing|duplicate|failed|failure)\b[^.;\n]{0,100}\b(?:profile|hardware hash|registration)\b/i) && !successOnly(e),
   'The log records a profile or registration problem. It does not establish the complete tenant assignment state or justify deleting/reuploading a hardware hash.',
   ['Verify registration identity, target profile, group membership and assignment/delivery timing in the tenant.'],
   ['Have an authorized administrator verify registration and targeting before proposing a change.']);
@@ -178,12 +196,24 @@ rule('autopilot-network', 'Autopilot & ESP', 'Autopilot connectivity failure rec
   ['Compare the failing request with enrollment, profile and attestation evidence using explicit identifiers where available.'],
   ['Propose a narrowly scoped connectivity review for the recorded endpoint; do not reset networking or alter the proxy.']);
 
+// Each catalog entry is visible in the knowledge base and retains its rule ID.
+for (const entry of EXTRA_KNOWLEDGE) for (const category of entry.categories) {
+  rule(entry.id + ':' + category, category, entry.title,
+    event => code(event, entry.code),
+    entry.meaning, [entry.check], [entry.resolution], entry.severity, 'high');
+}
+export function getKnowledgeBase() {
+  return RULES.map(item => ({id:item.key, category:item.category, title:item.title, meaning:item.root,
+    checks:[...item.checks], recommendations:[...item.recommendations], severity:item.severity,
+    confidence:item.confidence, reference:DOCS[item.category] || 'https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes'}));
+}
 function genericSeverity(event) {
-  if (successOnly(event)) return null;
-  if (has(event, /\b(?:no errors?|no failures?|error(?:\s+code)?\s*[=:]?\s*0(?:x0+)?\b|failed\s*[=:]\s*(?:false|0)\b)/i) && !has(event, /\b(?:exception|denied|blocked)\b|\b(?:failed|failure)\b(?!\s*[=:]\s*(?:false|0)\b)/i)) return null;
-  if (has(event, /\b(?:failed|failure|exception|fatal|denied|blocked)\b/i) || ['critical', 'error', '1', '2'].includes(text(event.level).toLowerCase())) return 'error';
-  if (has(event, /\b(?:warning|warn)\b/i) || ['warning', 'warn', '3'].includes(text(event.level).toLowerCase())) return 'warning';
-  if (event.codes.some(value => /^0x[89a-f][a-f0-9]{7}$/i.test(value))) return 'warning';
+  if (configurationOnly(event) || successOnly(event)) return null;
+  const signals = signalText(event.message);
+  if (/\b(?:failed|failure|exception|fatal|denied|blocked)\b|\[error\]|(?:^|[,;])\s*error\s*[:=,]|\berror\s+(?:CBS|DISM)\b/i.test(signals) || ['critical', 'error', '1', '2'].includes(text(event.level).toLowerCase())) return 'error';
+  if (/\b(?:warning|warn)\b/i.test(signals) || ['warning', 'warn', '3'].includes(text(event.level).toLowerCase())) return 'warning';
+  if (event.codes.some(value => /^\d+$/.test(value) && Number(value)>0 && !['3010','1641'].includes(value))) return 'warning';
+  if (event.codes.some(value => /^0x[89a-f][a-f0-9]{7}$/i.test(value) || /^AADSTS/i.test(value))) return 'warning';
   return null;
 }
 
@@ -219,7 +249,7 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
   for (const item of RULES) {
     const groups = new Map();
     for (const event of events) {
-      if (event.category !== item.category || !item.test(event)) continue;
+      if (event.category !== item.category || configurationOnly(event) || !item.test(event)) continue;
       matchedEvents.add(event.uid);
       // Same source and context, same explicit pattern; no time-based causation.
       const key = `${event.source}\0${event.context}`;
@@ -228,23 +258,35 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
     }
     for (const [group, evidence] of groups) add({
       id: 'finding-' + hash(item.key + '\0' + group), title: item.title, category: item.category,
-      severity: item.severity, confidence: item.confidence,
-      summary: `${evidence.length} imported event(s) independently show this pattern. Grouping does not establish a shared root cause. Review the linked evidence and proposed checks.`,
+      severity: item.severity, confidence: item.confidence, diagnosis: {type:'rule',rule_id:item.key},
+      summary: `${item.title}. ${evidence.length} record(s) in this source/context match the documented pattern. Review the stated meaning and verification checks; repeated matches do not establish a common cause.`,
       root_cause: item.root, evidence, checks: item.checks, recommendations: item.recommendations,
       references: DOCS[item.category] ? [DOCS[item.category]] : []
     });
   }
+  const unresolved = new Map();
   for (const event of events) {
     if (matchedEvents.has(event.uid)) continue;
     const severity = genericSeverity(event);
     if (!severity) continue;
+    const codes = event.codes.filter(value => !/^0x0+$/.test(value)).sort();
+    // Aggregate repeated text/code signals within source/context only. Different
+    // messages remain separate when no code is present; no causal link is inferred.
+    const pattern = codes.length ? codes.join(', ') : signalText(event.message).toLowerCase().replace(/^\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:z|[+-]\d{2}:?\d{2})?[, ]*/, '').replace(/\s+/g,' ').trim();
+    const key = [event.category,event.source,event.context,severity,pattern].join('\0');
+    if (!unresolved.has(key)) unresolved.set(key,{event,severity,codes,evidence:[]});
+    unresolved.get(key).evidence.push(event.uid);
+  }
+  for (const [key, group] of unresolved) {
+    const {event,severity,codes,evidence}=group;
+    const signal=codes.length ? codes.join(', ') : 'unmapped diagnostic signal';
     add({
-      id: 'finding-' + hash('unclassified\0' + event.uid), title: severity === 'error' ? 'Error recorded; root cause unconfirmed' : 'Warning or error code requires review',
-      category: event.category, severity, confidence: 'low',
-      summary: 'An imported record explicitly contains an error/warning signal or an unrecognized failure code. No specific diagnostic rule establishes its cause.',
-      root_cause: 'Root cause is unconfirmed from this record. The error may be a downstream symptom; inspect preceding events, the failing operation and any matching activity/app identifier.',
-      evidence: [event.uid], checks: ['Review this record and preceding entries from the same operation.', 'Look up the exact error code/provider and compare assignment, policy, execution and result evidence using explicit identifiers.'],
-      recommendations: ['Prepare one recommendation only after the first supported cause is verified. No repair or setting change is executed.'], references: []
+      id:'finding-'+hash('unclassified\0'+key), title:`${event.category}: ${signal} requires investigation`,
+      category:event.category, severity, confidence:'low', diagnosis:{type:'unclassified',rule_id:''},
+      summary:`${evidence.length} record(s) from ${event.source} contain the same ${codes.length?'code':'message'} pattern. The current knowledge rules do not interpret its cause.`,
+      root_cause:'Root cause is unconfirmed from the supplied signal. Identify the failing operation and first preceding error; repeated signals may be downstream symptoms.',
+      evidence, checks:['Review the exact code/provider and first error in the same operation.', 'Compare assignment, policy, execution and result using an explicit activity/app identifier; collect the missing source if needed.'],
+      recommendations:['Assign the investigation to the relevant endpoint, application or identity owner and obtain the missing evidence before approving a change.'], references:[]
     });
   }
   const reportWarnings = [...(Array.isArray(warnings) ? warnings.map(safe) : []), ...LIMITATIONS];
@@ -269,7 +311,7 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
   }
   return {
     started_at: new Date().toISOString(), synthetic: false,
-    report_metadata: { application: 'Windows Diagnostics', analyzer: 'Local browser text analysis', managed_by: 'Dibyendu', analysis_version: '1', synthetic: false },
+    report_metadata: { application: 'Windows Diagnostics', analyzer: 'Local browser text analysis', managed_by: 'Dibyendu', analysis_version: '2', synthetic: false },
     sources: unique([...(Array.isArray(sources) ? sources.slice(0, 1000).map(source => safe(typeof source === 'string' ? source : source?.name)) : []), ...events.map(event => event.source)].filter(Boolean)),
     warnings: unique(reportWarnings.filter(Boolean)).slice(0, 1100), events, findings
   };

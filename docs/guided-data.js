@@ -98,6 +98,7 @@ export function reportFromCase(item, reviewed = []) {
       confidence: finding.confidence,
       summary: finding.summary,
       root_cause: finding.rootCause,
+      diagnosis: {type:finding.diagnosis?.type || 'provided', rule_id:finding.diagnosis?.ruleId || ''},
       evidence: [...finding.evidenceIds],
       checks: [...finding.checks],
       recommendations: [...finding.recommendations],

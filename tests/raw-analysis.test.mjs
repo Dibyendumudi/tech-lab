@@ -38,7 +38,8 @@ test('CA codes remain separate observations and use complete token boundaries', 
     event('AADSTS53000 DeviceNotCompliant', 'signins.json'), event('AADSTS53001 DeviceNotDomainJoined', 'signins.json'),
     event('AADSTS53003 BlockedByConditionalAccess', 'signins.json'), event('AADSTS530030 similar unknown code', 'signins.json')
   ]);
-  assert.equal(report.findings.length, 3);
+  assert.equal(report.findings.filter(finding => finding.diagnosis.type === 'rule').length, 3);
+  assert.equal(report.findings.filter(finding => finding.diagnosis.type === 'unclassified').length, 1);
   assert.equal(report.findings.every(finding => finding.category === 'Conditional Access'), true);
   assert.match(report.findings[1].root_cause, /does not prove the device is entirely unregistered/);
   assert.match(report.findings[2].root_cause, /does not identify which policy/);

@@ -13,7 +13,7 @@ function mount(t, options = {}) {
   const { document, window } = parseHTML(page);
   Object.defineProperty(window.HTMLSelectElement.prototype, 'value', {
     configurable: true,
-    get() { return [...this.options].find(option => option.hasAttribute('selected'))?.getAttribute('value') ?? this.options[0]?.getAttribute('value') ?? this.options[0]?.textContent ?? ''; },
+    get() { const selected=[...this.options].find(option=>option.hasAttribute('selected')) || this.options[0]; return selected?.getAttribute('value') ?? selected?.textContent ?? ''; },
     set(value) { for (const option of this.options) option.toggleAttribute('selected', (option.getAttribute('value') ?? option.textContent) === String(value)); }
   });
   Object.defineProperty(window.HTMLInputElement.prototype, 'checked', {
@@ -299,4 +299,33 @@ test('large imported timelines paginate, search all records and open off-page fi
   assert.equal($('#stage-content tbody').children.length, 5);
   assert.ok($(`#stage-content tr[data-event="${targetId}"]`).classList.contains('selected'));
   assert.ok($('.timeline-details').textContent.includes('Paging record 205.'));
+});
+
+test('executive problem analysis, evidence KPIs, knowledge search and built-in checks use the imported scope', async t => {
+  const {app,$,click,search,change,window,downloads}=mount(t);
+  const content='2026-01-01T10:00:00Z Install failed 0x80070005\n2026-01-01T10:01:00Z Request failed 0xdeadbeef';
+  await app.importFiles([new File([content],'AppWorkload.log')]);
+  const panel=$('#exec-problem-analysis');
+  assert.ok(panel.textContent.includes('Executive problem analysis'));
+  assert.ok(panel.textContent.includes('denied access'));
+  assert.ok(panel.textContent.includes('Possible operational consequence'));
+  assert.equal(panel.querySelectorAll('.exec-summary-kpi').length,6);
+  assert.equal(panel.querySelectorAll('.exec-summary-kpi strong')[0].textContent,'1');
+  assert.equal(panel.querySelectorAll('.exec-summary-kpi strong')[1].textContent,'1');
+  const input=$('#exec-knowledge-query');input.value='0x80070005';input.dispatchEvent(new window.Event('input',{bubbles:true}));
+  assert.equal($('#exec-knowledge-list').querySelectorAll('.exec-knowledge-rule').length,1);
+  assert.ok($('#exec-knowledge-list').textContent.includes('Matched in this selection'));
+  const ids=app.state.imported.map(report=>report.id);
+  click('#exec-run-validation');
+  assert.match($('#exec-validation-status').textContent,/55 \/ 55/);
+  assert.equal($('#exec-validation-results').querySelectorAll('tbody tr').length,55);
+  assert.deepEqual(app.state.imported.map(report=>report.id),ids);
+  click('#exec-export');
+  assert.ok((await downloads.at(-1).blob.text()).includes('Executive problem analysis'));
+  click('#exec-problem-analysis [data-exec-finding]');
+  assert.equal($('#exec-detail').open,true);
+  click('#exec-close-detail');
+  change('#exec-category','Windows patching');
+  assert.ok($('#exec-problem-analysis').textContent.includes('No diagnostic evidence in this selection'));
+  assert.equal($('#exec-problem-analysis').querySelectorAll('.exec-summary-issue').length,0);
 });

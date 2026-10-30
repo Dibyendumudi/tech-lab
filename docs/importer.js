@@ -1,7 +1,7 @@
 /** Browser-local file decoding, raw evidence analysis and report validation. */
-import { parseReport, sanitizeText } from './analytics.js';
-import { parseRawLog } from './raw-parsers.js';
-import { analyzeRawEvents } from './raw-analysis.js';
+import { parseReport, sanitizeText } from './analytics.js?v=1.5.0';
+import { parseRawLog } from './raw-parsers.js?v=1.5.0';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.5.0';
 import { inspectCabinet, CAB_LIMITS } from './cab-format.js';
 import { extractCabEntries } from './cab-extractor.js';
 
@@ -219,7 +219,7 @@ export function readDiagnosticFiles(files) {
     let worker, timeout;
     const finish = (callback, value) => { clearTimeout(timeout); worker?.terminate(); callback(value); };
     try {
-      worker = new Worker(new URL('./import-worker.js', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./import-worker.js?v=1.5.0', import.meta.url), { type: 'module' });
       timeout = setTimeout(() => finish(reject, new Error('Import timed out. Select fewer files or a smaller export.')), 180000);
       worker.onmessage = event => event.data.error ? finish(reject, new Error(event.data.error)) : finish(resolve, event.data.result);
       worker.onerror = () => finish(reject, new Error('The local import worker could not start. Refresh the page and try again. No files were uploaded.'));

@@ -1,5 +1,5 @@
 import { scenarios } from './scenarios.js';
-import { casesFromReports, reportFromCase } from './guided-data.js';
+import { casesFromReports, reportFromCase } from './guided-data.js?v=1.5.0';
 
 export const steps = [
   { label: 'Select case', hint: 'Choose the signal', title: 'Start with a specific incident.', action: 'Load sample logs →' },

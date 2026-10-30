@@ -132,7 +132,7 @@ function flattenEvent(record) {
 function recordParts(input) {
   const record = flattenEvent(input);
   let status = lookup(record, 'status');
-  const entra = OBJECT(status) || lookup(record, 'conditionalAccessStatus', 'appliedConditionalAccessPolicies', 'conditionalAccessPolicies', 'userPrincipalName', 'sign-in error code') !== undefined;
+  const entra = (OBJECT(status) && lookup(record, 'createdDateTime') !== undefined && lookup(record, 'appId', 'resourceDisplayName', 'deviceDetail', 'userId') !== undefined) || lookup(record, 'conditionalAccessStatus', 'appliedConditionalAccessPolicies', 'conditionalAccessPolicies', 'userPrincipalName', 'sign-in error code') !== undefined;
   const timeFields = new Set(['TimeCreated', 'timestamp', 'DateTime', 'createdDateTime', 'Date (UTC)', 'Date', 'time'].map(KEY));
   const [timeKey, time] = Object.entries(record).find(([key, value]) => timeFields.has(KEY(key)) && value !== null && value !== '') || [];
   let parsedTime = timestamp(time);
