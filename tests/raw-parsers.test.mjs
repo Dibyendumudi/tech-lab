@@ -198,3 +198,35 @@ test('standalone Windows Event XML and CSV exports work without timezone guessin
   const csv = parseRawLog('Message\n"One event"', 'single-column.csv');
   assert.equal(csv.events[0].message, 'One event');
 });
+
+test('CAB archive names do not change the category of member logs',()=>{
+  const text='<![LOG[write output done. output = True, error = ]LOG]!><time="10:33:15.2001172" date="6-23-2026" component="AgentExecutor" type="1">';
+  assert.equal(parseRawLog(text,'AutopilotLogs.cab / AgentExecutor.log').events[0].category,'Enterprise');
+  assert.equal(parseRawLog('Windows Update scan started','AutopilotLogs.cab / collector.log').events[0].category,'Windows patching');
+});
+
+test('operator supplied offsets zone local timestamps without altering explicit UTC exports',()=>{
+  const parsed=parseRawLog('2026-06-23T10:33:15.2001172 observation\n2026-06-23T10:33:15Z observation','events.log',{localUtcOffset:'+02:00'});
+  assert.equal(parsed.events[0].timestamp,'2026-06-23T10:33:15.2001172+02:00');
+  assert.equal(parsed.events[1].timestamp,'2026-06-23T10:33:15Z');
+  assert.match(parsed.warnings.join(' '),/1 retained local timestamp.*operator-supplied.*\+02:00/);
+  assert.throws(()=>parseRawLog('observation','events.log',{localUtcOffset:'guess'}),/verified local UTC offset/);
+});
+
+test('sparse control characters in a readable installer log are marked and reported',()=>{
+  const text='Installation observation\n'.repeat(200)+'Font record\x05complete';
+  const parsed=parseRawLog(text,'Font_Install.log');
+  assert.match(parsed.warnings.join(' '),/1 nonprinting control character/);
+  assert.ok(parsed.events.some(e=>e.message.includes('\uFFFD')));
+  assert.throws(()=>parseRawLog('\x05'.repeat(30),'fake.log'),/binary/);
+});
+
+test('Autopilot and MDM snapshots retain allowlisted context without private metadata',()=>{
+  const profile=parseRawLog(JSON.stringify({CloudAssignedTenantId:'private-tenant',CloudAssignedOobeConfig:123,CloudAssignedDomainJoinMethod:0,CloudAssignedTenantDomain:'private.example',DeploymentProfileName:'private-profile'}),'Demo.cab / AutopilotDDSZTDFile.json');
+  assert.equal(profile.events[0].category,'Autopilot & ESP');
+  assert.match(profile.events[0].message,/configuration only/);
+  assert.doesNotMatch(profile.events[0].message,/private/);
+  const metadata=parseRawLog(JSON.stringify({MdmDiagVersion:'10.0',ProductName:'Windows 11',CurrentBuildNumber:'26100',DefaultUserName:'private-user'}),'Demo.cab / MdmDiagLogMetadata.json');
+  assert.match(metadata.events[0].message,/Windows 11/);
+  assert.doesNotMatch(metadata.events[0].message,/private-user/);
+});

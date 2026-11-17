@@ -45,3 +45,13 @@ Integrates the recovered dashboard design on top of v1.6.1: persistent dark/ligh
 ### v1.6.3 live evidence and findings
 
 The former static showcase URL now opens `index.html#evidence`. The Evidence & findings sidebar view shares imported reports, filters, finding details and exports with Executive dashboard and Guided investigation. It lists source records in pages of 100 and up to 60 ranked findings; filters cover all records, not only the visible page. Switch views inside the app to retain imported data. Files remain in memory for the current page session; opening another tab or reloading requires re-import. Demonstration data remains explicitly labelled until an import succeeds. The old synthetic showcase metrics are no longer served.
+
+### v1.6.4 Autopilot CAB corrections
+
+CAB names are excluded from workstream inference; member names, providers and visible evidence determine categories. Empty AgentExecutor `error =` output does not create a failure. Sparse control characters in otherwise readable logs are replaced with visible markers and reported as partial analysis; binary content remains rejected. Known Autopilot profile and MDM metadata JSON snapshots contribute allowlisted configuration/context fields, not proof of successful deployment. Private tenant, user and profile-name fields are omitted by these snapshot adapters.
+
+The evidence view and finding details display timezone-unspecified local timestamps explicitly. Before import, an operator can supply a verified `±HH:MM` device UTC offset for the relevant log period. This only zones otherwise naive raw records, leaves explicit timestamps unchanged, and records the assumption in import warnings. Do not infer the source timezone from the browser or CAB name. Import periods with different daylight-saving offsets separately. Without a verified offset, these records remain outside UTC charts and date filters.
+
+EVTX, ETL (including numbered trace segments), registry dumps, hardware-hash inventories and nested CABs still have explicit coverage gaps. The 50,000-record raw limit and per-source allocations remain bounded and omissions are reported. Local validation against user-supplied CABs must not add the CAB or derived private evidence to version control; regression tests use synthetic shape examples only.
+
+Format references: [Microsoft MDM log collection](https://learn.microsoft.com/en-us/windows/client-management/mdm-collect-logs), [Microsoft CMTrace](https://learn.microsoft.com/en-us/intune/configmgr/core/support/cmtrace), and [Autopilot troubleshooting](https://learn.microsoft.com/en-us/autopilot/troubleshooting-faq).

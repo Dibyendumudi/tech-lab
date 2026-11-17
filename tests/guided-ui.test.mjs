@@ -440,3 +440,17 @@ test('former showcase URL enters the live evidence route rather than synthetic c
   assert.match(redirect,/url=\.\/index.html#evidence/);
   assert.doesNotMatch(redirect,/14,823|Math.random|tailwindcss/);
 });
+
+test('local-clock evidence stays visible and a verified source offset reaches the importer',async t=>{
+  let received;
+  const {app,$,click}=mount(t,{readFiles:(files,options)=>{received=options;return importDiagnosticFiles(files,options);}});
+  const log=new File(['<![LOG[Install failed 0x80070005]LOG]!><time="10:33:15.2001172" date="6-23-2026" component="AppWorkload" type="3">'],'AppWorkload.log');
+  await app.importFiles([log]);click('[data-exec-view="evidence"]');
+  assert.match($('#exec-evidence-content').textContent,/2026-06-23T10:33:15.2001172.*local clock/);
+  $('#exec-local-offset').value='guess';await app.importFiles([log]);
+  assert.match($('#exec-import-status').textContent,/verified source UTC offset/);
+  $('#exec-local-offset').value='+02:00';await app.importFiles([log]);
+  assert.equal(received.localUtcOffset,'+02:00');
+  assert.equal(app.state.imported[0].events[0].timestamp,'2026-06-23T08:33:15.200Z');
+  assert.match($('#exec-evidence-content').textContent,/08:33 UTC/);
+});

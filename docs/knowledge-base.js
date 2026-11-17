@@ -1,4 +1,4 @@
-import { SOURCED_CODE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.3';
+import { SOURCED_CODE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.4';
 /** Reviewed code meanings; an error meaning is not a confirmed root cause. */
 const ALL = ['Win32 apps','Windows patching','Conditional Access','Autopilot & ESP','Enterprise'];
 const item = (code,categories,title,meaning,check,resolution,severity='error') => ({id:'code-'+code.toLowerCase(),code,categories,title,meaning,check,resolution,severity});

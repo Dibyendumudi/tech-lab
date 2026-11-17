@@ -1,8 +1,8 @@
-import { escapeHTML } from './utils.js?v=1.6.3';
-export { escapeHTML } from './utils.js?v=1.6.3';
-import { downloadBlob } from './downloads.js?v=1.6.3';
-import { scenarios } from './scenarios.js?v=1.6.3';
-import { casesFromReports, reportFromCase } from './guided-data.js?v=1.6.3';
+import { escapeHTML } from './utils.js?v=1.6.4';
+export { escapeHTML } from './utils.js?v=1.6.4';
+import { downloadBlob } from './downloads.js?v=1.6.4';
+import { scenarios } from './scenarios.js?v=1.6.4';
+import { casesFromReports, reportFromCase } from './guided-data.js?v=1.6.4';
 
 export const steps = [
   { label: 'Select case', hint: 'Choose the signal', title: 'Start with a specific incident.', action: 'Load sample logs →' },

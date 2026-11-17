@@ -141,3 +141,23 @@ test('many native reports share bounded archive summaries rather than multiplyin
   assert.ok(result.reports.every(report => report.warnings.length < 6));
   assert.equal(result.archives[0].entries.length, 60);
 });
+
+test('realistic Autopilot CAB shapes retain context and local times without phantom failures',async()=>{
+  const line='<![LOG[write output done. output = True, error = ]LOG]!><time="10:33:15.2001172" date="6-23-2026" component="AgentExecutor" type="1">';
+  const file=cab([
+    {name:'AgentExecutor.log',text:line},
+    {name:'AutopilotDDSZTDFile.json',text:JSON.stringify({CloudAssignedTenantId:'synthetic-tenant',CloudAssignedOobeConfig:123})},
+    {name:'MdmDiagLogMetadata.json',text:JSON.stringify({MdmDiagVersion:'10.0',ProductName:'Windows 11',DefaultUserName:'private-example'})}
+  ]);
+  const original=await importDiagnosticFiles([file]);
+  assert.equal(original.archives[0].analyzed,3);
+  assert.equal(original.reports[0].findings.length,0);
+  const local=original.reports[0].events.find(e=>e.source.endsWith('AgentExecutor.log'));
+  assert.equal(local.category,'Enterprise');assert.equal(local.timestamp,null);
+  assert.equal(local.rawTimestamp,'2026-06-23T10:33:15.2001172');
+  assert.doesNotMatch(JSON.stringify(original.reports),/private-example/);
+  const zoned=await importDiagnosticFiles([file],{localUtcOffset:'+02:00'});
+  const timed=zoned.reports[0].events.find(e=>e.source.endsWith('AgentExecutor.log'));
+  assert.equal(timed.timestamp,'2026-06-23T08:33:15.200Z');
+  assert.equal(buildDashboard(zoned.reports).timeline.reduce((n,b)=>n+b.events,0),1);
+});

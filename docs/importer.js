@@ -1,10 +1,10 @@
-import { hashText, uniqueMessages } from './utils.js?v=1.6.3';
+import { hashText, uniqueMessages } from './utils.js?v=1.6.4';
 /** Browser-local file decoding, raw evidence analysis and report validation. */
-import { parseReport, sanitizeText } from './analytics.js?v=1.6.3';
-import { parseRawLog } from './raw-parsers.js?v=1.6.3';
-import { analyzeRawEvents } from './raw-analysis.js?v=1.6.3';
-import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.3';
-import { extractCabEntries } from './cab-extractor.js?v=1.6.3';
+import { parseReport, sanitizeText } from './analytics.js?v=1.6.4';
+import { parseRawLog } from './raw-parsers.js?v=1.6.4';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.6.4';
+import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.4';
+import { extractCabEntries } from './cab-extractor.js?v=1.6.4';
 
 export const IMPORT_LIMITS = Object.freeze({ files: 20, fileBytes: 20 * 1024 * 1024, totalBytes: 50 * 1024 * 1024, rawEvents: 50000, events: 100000, findings: 3000 });
 export const IMPORT_EXTENSIONS = Object.freeze(['.cab', '.log', '.txt', '.json', '.jsonl', '.ndjson', '.csv', '.xml']);
@@ -63,7 +63,7 @@ function reportCandidate(value) {
 }
 
 /** Returns only canonical, redacted reports. No fetch, storage or endpoint calls. */
-export async function importDiagnosticFiles(selection) {
+export async function importDiagnosticFiles(selection, options = {}) {
   const files = Array.from(selection || []);
   if (!files.length) return { reports: [], errors: [], notices: [], archives: [] };
   const hasCab = files.some(file => extension(file.name) === '.cab');
@@ -109,12 +109,12 @@ export async function importDiagnosticFiles(selection) {
       // Share the remaining budget with unread sources. An early noisy log must
       // not consume every slot before later CAB members can contribute evidence.
       const allocation = Math.max(1, Math.floor(remaining / reservedSources));
-      const parsed = parseRawLog(decoded.text, source, { maxEvents: allocation });
+      const parsed = parseRawLog(decoded.text, source, { maxEvents: allocation, localUtcOffset: options.localUtcOffset });
       if (!parsed.events.length) throw new Error('No readable diagnostic event records were found.');
       rawEvents.push(...parsed.events.map(event => ({ ...event, uid: `${fileId}:${event.uid}` })));
       rawSources.push(source); count = parsed.events.length;
       rawWarnings.push(...decoded.warnings.map(warning => `${label}: ${warning}`), ...parsed.warnings.map(warning => `${label}: ${warning}`));
-      partial = parsed.warnings.some(warning => /skipped|showing the first|truncat|omitted/i.test(warning)) || parsed.events.some(event => /\[message truncated\]/i.test(event.message));
+      partial = parsed.warnings.some(warning => /skipped|showing the first|truncat|omitted|control character/i.test(warning)) || parsed.events.some(event => /\[message truncated\]/i.test(event.message));
     }
     seen.add(fileId);
     return { status: partial ? 'partial' : 'analyzed', eventCount: count, reason: partial ? 'Only part of this source was parsed. Review its record-limit or malformed-record notices.' : '' };
@@ -152,7 +152,7 @@ export async function importDiagnosticFiles(selection) {
       archive.entries = metadata.entries.map(entry => {
         const ext = extension(entry.name);
         let reason = entry.unsafe ? entry.reason || 'Unsafe archive path.' : '';
-        if (!reason && !IMPORT_EXTENSIONS.includes(ext)) reason = ext === '.evtx' ? 'Binary EVTX is not decoded by this text analyzer. Its event records require conversion to JSON/XML.' : ext === '.etl' ? 'Binary ETL requires Windows tracing tools; it does not contribute decoded evidence.' : 'This file type is not a supported diagnostic text export.';
+        if (!reason && !IMPORT_EXTENSIONS.includes(ext)) reason = ext === '.evtx' ? 'Binary EVTX is not decoded by this text analyzer. Its event records require conversion to JSON/XML.' : /\.etl(?:\.\d+)?$/i.test(entry.name) ? 'Binary ETL requires Windows tracing tools; it does not contribute decoded evidence.' : 'This file type is not a supported diagnostic text export.';
         if (!reason && ext === '.cab') reason = 'Nested archives are not unpacked recursively.';
         if (!reason && entry.size > IMPORT_LIMITS.fileBytes) reason = 'This member exceeds the 20 MiB readable-file limit.';
         return { name: sanitizeText(entry.name), size: entry.size, status: reason ? 'skipped' : 'pending', reason, eventCount: 0 };
@@ -223,17 +223,17 @@ export async function importDiagnosticFiles(selection) {
 }
 
 /** Module workers keep large Windows text exports off the interface thread. */
-export function readDiagnosticFiles(files) {
-  if (typeof Worker === 'undefined') return importDiagnosticFiles(files);
+export function readDiagnosticFiles(files, options = {}) {
+  if (typeof Worker === 'undefined') return importDiagnosticFiles(files, options);
   return new Promise((resolve, reject) => {
     let worker, timeout;
     const finish = (callback, value) => { clearTimeout(timeout); worker?.terminate(); callback(value); };
     try {
-      worker = new Worker(new URL('./import-worker.js?v=1.6.3', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./import-worker.js?v=1.6.4', import.meta.url), { type: 'module' });
       timeout = setTimeout(() => finish(reject, new Error('Import timed out. Select fewer files or a smaller export.')), 180000);
       worker.onmessage = event => event.data.error ? finish(reject, new Error(event.data.error)) : finish(resolve, event.data.result);
       worker.onerror = () => finish(reject, new Error('The local import worker could not start. Refresh the page and try again. No files were uploaded.'));
-      worker.postMessage({ files: Array.from(files) });
+      worker.postMessage({ files: Array.from(files), options: {localUtcOffset: options.localUtcOffset || ''} });
     } catch { finish(reject, new Error('The browser could not start local analysis. Refresh the page and try again.')); }
   });
 }

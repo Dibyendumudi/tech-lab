@@ -1,8 +1,8 @@
-import { hashText } from './utils.js?v=1.6.3';
+import { hashText } from './utils.js?v=1.6.4';
 /** Local observations from imported text exports. Never executes a resolution. */
-import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.3';
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.3';
-import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.3';
+import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.4';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.4';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.4';
 
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;
@@ -30,6 +30,7 @@ const code = (event, value) => event.codes.some(item => item.toLowerCase() === v
 function signalText(message) {
   return message
     .replace(/["'](error(?:code)?|failure(?:reason)?|failed|exception|warning|warn)["']\s*:\s*(?:null|false|0|"(?:0x0+|0|none|no error|success)?")(?=\s*[,}])/gi, ' ')
+    .replace(/(?:^|,)\s*error\s*=\s*$/gi, ' ')
     .replace(/\b(?:no errors?|no failures?|without errors?|without failures?|not failed|not blocked|not denied)\b/gi, ' ')
     .replace(/\b(?:errors?|error\s*code|failed|failures?|warnings?)\s*[=:]\s*["']?(?:false|0x0+|0)["']?\b/gi, ' ');
 }
@@ -52,7 +53,7 @@ function installerResult(event, value) {
 function inferCategory(event) {
   if (/^\s*(?:DeviceAuthStatus|AzureAdPrt)\s*:/im.test(text(event.message))) return 'Enterprise';
   if (CATEGORIES.includes(event.category) && event.category !== 'Enterprise') return event.category;
-  const source = `${text(event.source)} ${text(event.provider)}`.toLowerCase();
+  const source = `${text(event.source).replace(/^.*?\.cab\s*\/\s*/i, '')} ${text(event.provider)}`.toLowerCase();
   const message = text(event.message).toLowerCase();
   const all = source + ' ' + message + ' ' + (Array.isArray(event.codes) ? event.codes.join(' ') : '');
   if (/\baadsts\d+\b/.test(all)) return 'Conditional Access';

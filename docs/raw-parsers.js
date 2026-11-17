@@ -1,4 +1,4 @@
-import { hashText, last, hasOwn as own } from './utils.js?v=1.6.3';
+import { hashText, last, hasOwn as own } from './utils.js?v=1.6.4';
 // Local, bounded readers for Windows text exports. No network, storage, or execution.
 const MAX_TEXT = 20 * 1024 * 1024;
 const MAX_EVENTS = 50_000;
@@ -57,6 +57,7 @@ function timestamp(value) {
   return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${minute}:${second}${fraction ? '.' + fraction : ''}${normalizedZone}`;
 }
 function category(source, message) {
+  source = source.replace(/^.*?\.cab\s*\/\s*/i, '');
   const text = (source + ' ' + message).toLowerCase();
   const filename = last(source.replace(/\\/g, '/').split('/')).toLowerCase();
   if (/\baadsts\d+\b/.test(text)) return 'Conditional Access';
@@ -171,6 +172,22 @@ function jsonRecords(value) {
     if (recordIsDiagnostic(value)) return [value];
   }
   throw new Error('JSON does not contain supported event or Entra sign-in records. Export an event object or an array of records.');
+}
+
+function snapshotParts(value, filename) {
+  if (!OBJECT(value)) return null;
+  const name=last(filename.replace(/\\/g,'/').split('/')).trim().toLowerCase();
+  let fields, label, category;
+  if(name==='autopilotddsztdfile.json' && own(value,'CloudAssignedTenantId') && own(value,'CloudAssignedOobeConfig')) {
+    fields=['CloudAssignedOobeConfig','CloudAssignedDomainJoinMethod','CloudAssignedForcedEnrollment','IsExplicitProfileAssignment','CloudAssignedAutopilotUpdateDisabled','CloudAssignedPrivacyDiagnostics','HybridJoinSkipDCConnectivityCheck'];
+    label='Autopilot profile snapshot (configuration only; not proof of enrollment success)';category='Autopilot & ESP';
+  } else if(name==='mdmdiaglogmetadata.json' && own(value,'MdmDiagVersion')) {
+    fields=['MdmDiagVersion','AreaName','ProductName','EditionID','CurrentBuildNumber','UBR','BuildBranch'];
+    label='MDM diagnostic collection metadata (context only)';category='Enterprise';
+  } else return null;
+  const selected={};
+  for(const key of fields) if(['string','number','boolean'].includes(typeof value[key])) selected[key]=short(value[key],256);
+  return {message:label+': '+JSON.stringify(selected),category,level:'Information',timestamp:null};
 }
 
 function parseCSV(text, emit) {
@@ -404,22 +421,28 @@ export function parseRawLog(text, filename, options = {}) {
   if (text.length > MAX_TEXT) throw new Error('File exceeds the 20 MiB text import limit. Split the export into smaller files.');
   text = text.replace(/^\uFEFF/, '');
   if (!text.trim()) throw new Error('The selected file is empty. Choose a log containing diagnostic records.');
-  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text) || /^(?:MSCF|ElfFile|MZ)/.test(text)) throw new Error('This file contains binary data. Extract a CAB or export EVTX/ETL as supported text before importing.');
+  const controls=text.match(/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]/g)||[];
+  if (text.includes('\0') || controls.length>Math.max(2,Math.floor(text.length*.001)) || /^(?:MSCF|ElfFile|MZ)/.test(text)) throw new Error('This file contains binary data. Extract a CAB or export EVTX/ETL as supported text before importing.');
   const requested = options.maxEvents === undefined ? MAX_EVENTS : options.maxEvents;
   if (!Number.isInteger(requested) || requested < 1) throw new Error('The event limit must be a positive integer.');
   const limit = Math.min(requested, MAX_EVENTS), events = [], warnings = [];
-  let total = 0, skipped = 0;
+  if(controls.length){text=text.replace(/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]/g,'\uFFFD');warnings.push(`${controls.length} nonprinting control character(s) were replaced in otherwise readable text. Review the original source.`);}
+  const offset=options.localUtcOffset||'';
+  if(offset&&!/^[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00)$/.test(offset))throw new Error('Use a verified local UTC offset in ±HH:MM format, for example +02:00.');
+  let total = 0, skipped = 0, converted=0;
   const sourceHash = hash(filename);
   const emit = (parts, line) => {
     total++;
     if (events.length >= limit) return;
     const message = short(parts.message);
+    let eventTime=parts.timestamp||null;
+    if(eventTime&&offset&&!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(eventTime)){eventTime+=offset;converted++;}
     const event = {
       uid: `raw-${sourceHash}-${total}`,
       source: filename,
       line,
       message,
-      timestamp: parts.timestamp || null,
+      timestamp: eventTime,
       category: parts.category || category(filename + ' ' + (parts.provider || ''), message),
       stage: stage(message),
       context: context(message),
@@ -433,7 +456,9 @@ export function parseRawLog(text, filename, options = {}) {
     let value;
     try { value = JSON.parse(text); } catch { throw new Error('Malformed JSON export. Choose an event/sign-in JSON export or a Windows Diagnostics report.'); }
     validateStructure(value);
-    jsonRecords(value).forEach((record, index) => emit(recordParts(record), index + 1));
+    const snapshot=snapshotParts(value,filename);
+    if(snapshot)emit(snapshot,1);
+    else jsonRecords(value).forEach((record, index) => emit(recordParts(record), index + 1));
   } else if (extension === 'jsonl' || extension === 'ndjson') {
     text.split(/\r?\n|\r/).forEach((line, index) => {
       if (!line.trim()) return;
@@ -452,6 +477,7 @@ export function parseRawLog(text, filename, options = {}) {
   else if (extension === 'xml') parseXML(text, emit);
   else parseText(text, emit);
   if (!events.length) throw new Error(skipped ? 'No usable event records were found. JSONL/NDJSON requires one diagnostic object per line.' : 'No diagnostic records were found in this export.');
+  if(converted)warnings.push(`${converted.toLocaleString('en-US')} retained local timestamp(s) used the operator-supplied UTC offset ${offset}. Verify the device timezone and daylight-saving period; explicitly zoned records were unchanged.`);
   if (total > limit) warnings.push(`Showing the first ${limit.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} records. Split the file to analyze the remaining records.`);
   return {events, warnings};
 }

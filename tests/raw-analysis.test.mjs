@@ -117,3 +117,11 @@ test('parser truncation suffix and warning survive analysis without further trun
   assert.equal(report.events[0].message.endsWith(' [message truncated]'), true);
   assert.match(report.warnings.join(' '), /event message\(s\) were truncated/);
 });
+
+test('empty AgentExecutor error output does not create a failure while nonempty errors do',()=>{
+  const quiet=analyzeRawEvents([{uid:'quiet',source:'AutopilotLogs.cab / AgentExecutor.log',category:'Enterprise',level:'Information',message:'write output done. output = True\r\n, error = \r\n'}]);
+  assert.equal(quiet.findings.length,0);
+  assert.equal(quiet.events[0].category,'Enterprise');
+  const failed=analyzeRawEvents([{uid:'failed',source:'AutopilotLogs.cab / AgentExecutor.log',category:'Enterprise',level:'Information',message:'write output done. output = , error = execution failed'}]);
+  assert.equal(failed.findings.length,1);
+});
