@@ -1,7 +1,7 @@
 /** Browser-local file decoding, raw evidence analysis and report validation. */
-import { parseReport, sanitizeText } from './analytics.js?v=1.5.0';
-import { parseRawLog } from './raw-parsers.js?v=1.5.0';
-import { analyzeRawEvents } from './raw-analysis.js?v=1.5.0';
+import { parseReport, sanitizeText } from './analytics.js?v=1.6.0';
+import { parseRawLog } from './raw-parsers.js?v=1.6.0';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.6.0';
 import { inspectCabinet, CAB_LIMITS } from './cab-format.js';
 import { extractCabEntries } from './cab-extractor.js';
 
@@ -80,9 +80,9 @@ export async function importDiagnosticFiles(selection) {
   }
   const reports = [], errors = [], notices = [], archives = [], rawEvents = [], rawSources = [], rawWarnings = [], seen = new Set(), seenReports = new Set(), seenArchives = new Set(), unavailableSources = [];
   const archiveSummaries = [], archiveDetails = [];
-  let eventCount = 0, findingCount = 0, cabEntries = 0, cabExpandedBytes = 0;
+  let eventCount = 0, findingCount = 0, cabEntries = 0, cabExpandedBytes = 0, laterFiles = 0;
 
-  async function readEvidence(bytes, source) {
+  async function readEvidence(bytes, source, reservedSources = 1) {
     const label = sanitizeText(source), decoded = decodeLogBytes(bytes);
     const fileId = fingerprint(source + '\0' + decoded.text);
     if (seen.has(fileId)) return { status: 'duplicate', eventCount: 0, reason: 'Identical source content was already included in this selection.' };
@@ -104,7 +104,10 @@ export async function importDiagnosticFiles(selection) {
     } else {
       const remaining = Math.min(IMPORT_LIMITS.rawEvents - rawEvents.length, IMPORT_LIMITS.events - eventCount - rawEvents.length);
       if (remaining <= 0 || findingCount > IMPORT_LIMITS.findings - 1000) throw new Error('The 50,000-record raw evidence limit was reached; this source was not analyzed.');
-      const parsed = parseRawLog(decoded.text, source, { maxEvents: remaining });
+      // Share the remaining budget with unread sources. An early noisy log must
+      // not consume every slot before later CAB members can contribute evidence.
+      const allocation = Math.max(1, Math.floor(remaining / reservedSources));
+      const parsed = parseRawLog(decoded.text, source, { maxEvents: allocation });
       if (!parsed.events.length) throw new Error('No readable diagnostic event records were found.');
       rawEvents.push(...parsed.events.map(event => ({ ...event, uid: `${fileId}:${event.uid}` })));
       rawSources.push(source); count = parsed.events.length;
@@ -172,7 +175,8 @@ export async function importDiagnosticFiles(selection) {
         try {
           if (!(entry.bytes instanceof Uint8Array) || entry.bytes.byteLength !== original.size || entry.bytes.byteLength > IMPORT_LIMITS.fileBytes) throw new Error('Extracted data does not match the bounded CAB file size.');
           const source = `${file.name} / ${original.name}`;
-          Object.assign(row, await readEvidence(entry.bytes, source));
+          const unread = archive.entries.filter(item => item.status === 'pending').length;
+          Object.assign(row, await readEvidence(entry.bytes, source, unread + laterFiles));
         } catch (error) {
           row.status = /no .*records|does not contain supported|no windows event|requires named|contains no readable|empty/i.test(error.message) ? 'skipped' : 'failed';
           row.reason = sanitizeText(error.message || 'Could not analyze this archive member.');
@@ -187,13 +191,14 @@ export async function importDiagnosticFiles(selection) {
     archiveSummary(archive);
   }
 
-  for (const file of files) {
+  for (const [fileIndex, file] of files.entries()) {
+    laterFiles = files.length - fileIndex - 1;
     const label = sanitizeText(String(file.name || 'Unnamed file'));
     try {
       if (!IMPORT_EXTENSIONS.includes(extension(file.name))) throw formatError(file.name);
       if (extension(file.name) === '.cab') await readCab(file);
       else {
-        const result = await readEvidence(await file.arrayBuffer(), String(file.name));
+        const result = await readEvidence(await file.arrayBuffer(), String(file.name), 1 + laterFiles);
         if (result.status === 'duplicate') notices.push(`${label}: duplicate file skipped.`);
       }
     } catch (error) { errors.push(`${label}: ${sanitizeText(error.message || 'Could not read this file.')}`); }
@@ -219,7 +224,7 @@ export function readDiagnosticFiles(files) {
     let worker, timeout;
     const finish = (callback, value) => { clearTimeout(timeout); worker?.terminate(); callback(value); };
     try {
-      worker = new Worker(new URL('./import-worker.js?v=1.5.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./import-worker.js?v=1.6.0', import.meta.url), { type: 'module' });
       timeout = setTimeout(() => finish(reject, new Error('Import timed out. Select fewer files or a smaller export.')), 180000);
       worker.onmessage = event => event.data.error ? finish(reject, new Error(event.data.error)) : finish(resolve, event.data.result);
       worker.onerror = () => finish(reject, new Error('The local import worker could not start. Refresh the page and try again. No files were uploaded.'));

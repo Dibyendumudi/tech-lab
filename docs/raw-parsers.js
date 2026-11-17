@@ -68,7 +68,8 @@ function category(source, message) {
   const text = (source + ' ' + message).toLowerCase();
   const filename = source.replace(/\\/g, '/').split('/').at(-1).toLowerCase();
   if (/\baadsts\d+\b/.test(text)) return 'Conditional Access';
-  if (/appworkload|intunemanagementextension|appactionprocessor/.test(filename)) return 'Win32 apps';
+  if (/appworkload|intunemanagementextension|appactionprocessor|appxdeployment|appxpackaging/.test(filename) || /0x80073(?:cf3|d02|d06|d10)\b/i.test(message)) return 'Win32 apps';
+  if (/0x8024[0-9a-f]{4}\b/i.test(message)) return 'Windows patching';
   if (/conditional.?access|sign.?in|\bentra\b/.test(text)) return 'Conditional Access';
   if (/autopilot|enrollment status page|esp timeout|moderndeployment|provisioning.diagnostics|tpm attestation|enrollment fail|esp app|esp phase/.test(text)) return 'Autopilot & ESP';
   if (/windowsupdate|windows update|updateorchestrator|cbs\.log|servicing|update ring|0x800f081f|0x800f0831/.test(text)) return 'Windows patching';

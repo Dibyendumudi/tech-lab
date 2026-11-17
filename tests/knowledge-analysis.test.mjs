@@ -4,14 +4,15 @@ import {parseRawLog} from '../docs/raw-parsers.js';
 import {analyzeRawEvents,getKnowledgeBase} from '../docs/raw-analysis.js';
 import {parseReport,buildDashboard} from '../docs/analytics.js';
 import {buildExecutiveSummary,executiveSummaryHTML,knowledgeBaseHTML,knowledgeCatalog} from '../docs/executive-summary.js';
-import {runValidationCases} from '../docs/validation-cases.js';
+import {runValidationCases,VALIDATION_CASES} from '../docs/validation-cases.js';
 import {executiveBrief} from '../docs/executive.js';
 const ev=(message,source='AppWorkload.log',extra={})=>({uid:message,source,message,...extra});
 const dataFor=events=>buildDashboard([parseReport(analyzeRawEvents(events))]);
 
 test('bundled checks exercise the parser, analyzer and canonical report for all advertised examples',()=>{
   const results=runValidationCases();
-  assert.equal(results.length,55);
+  assert.equal(results.length,VALIDATION_CASES.length);
+  assert.equal(results.length,73);
   assert.deepEqual(results.filter(result=>!result.passed),[]);
   assert.ok(results.some(result=>result.name.includes('Zero error code')));
   assert.ok(results.some(result=>result.category==='Autopilot & ESP'));
@@ -98,7 +99,7 @@ test('executive brief includes the problem analysis and safely escapes imported 
   assert.ok(html.includes('&lt;img'));
   assert.equal(html.includes('<img'),false);
   assert.equal(html.includes('<script>'),false);
-  assert.equal(/(?:src|href)="https?:\/\//.test(html),false);
+  assert.equal(/<(?:script|img|iframe|link)\b[^>]*(?:src|href)="https?:\/\//.test(html),false);
 });
 test('searchable knowledge shows its meaning, verification checks, source reference and match state',()=>{
   const data=dataFor([ev('Denied 0x80070005')]);

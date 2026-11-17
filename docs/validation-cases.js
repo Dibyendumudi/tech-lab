@@ -1,8 +1,9 @@
 /** Bundled synthetic interpretation checks. No supplied dataset is read or changed. */
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js';
-import { analyzeRawEvents } from './raw-analysis.js?v=1.5.0';
-import { parseRawLog } from './raw-parsers.js?v=1.5.0';
-import { parseReport } from './analytics.js?v=1.5.0';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.0';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.0';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.6.0';
+import { parseRawLog } from './raw-parsers.js?v=1.6.0';
+import { parseReport } from './analytics.js?v=1.6.0';
 const sources={'Win32 apps':'AppWorkload.json','Windows patching':'WindowsUpdateClient.json','Conditional Access':'SignIns.json','Autopilot & ESP':'Autopilot.json',Enterprise:'events.json'};
 const make=(name,category,message,expected,extra={})=>({name,category,filename:sources[category],content:JSON.stringify({TimeCreated:'2026-01-01T10:00:00Z',Message:message,...extra}),expected});
 export const VALIDATION_CASES = [
@@ -30,10 +31,16 @@ export const VALIDATION_CASES = [
   make('Autopilot request DNS failure','Autopilot & ESP','Connectivity failed with 0x80072EE7','autopilot-network'),
   make('Observed join state','Enterprise','AzureAdJoined : NO','join-observation'),
   ...EXTRA_KNOWLEDGE.map(entry=>make(entry.title,entry.categories[0],/^\d+$/.test(entry.code)?`Installer exit code ${entry.code}`:`Operation failed with ${entry.code}`,entry.id+':'+entry.categories[0])),
+  ...STATE_KNOWLEDGE.map(entry=>make(entry.title,'Enterprise',entry.example,entry.id)),
   make('Success text is not an error','Win32 apps','Installation completed successfully. No errors.',null),
   make('Zero error code in JSON is not a failure','Win32 apps','Operation complete.',null,{ErrorCode:0,Level:2}),
   make('Null diagnostic fields are not failures','Enterprise','Operation complete.',null,{status:{errorCode:0,failureReason:null},Exception:null}),
   make('Configured return codes are not execution results','Win32 apps','Configured return codes: 1603=failed, 3010=soft reboot',null),
+  make('Successful device authentication is not a failure','Enterprise','DeviceAuthStatus : SUCCESS',null),
+  make('Present PRT is not absent','Enterprise','AzureAdPrt : YES',null),
+  make('Quoted PRT instructions are not a collected state','Enterprise','Documentation example: AzureAdPrt : NO',null),
+  make('Configured update code is not an operation result','Windows patching','Configured error codes: 0x8024401B',null),
+  make('Configured AppX code is not an operation result','Win32 apps','Configured error codes: 0x80073D02',null),
   make('Informational mentions are not a context mismatch','Win32 apps','SYSTEM context; user signed in',null)
 ];
 export function runValidationCases() {

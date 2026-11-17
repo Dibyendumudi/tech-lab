@@ -309,7 +309,7 @@ test('executive problem analysis, evidence KPIs, knowledge search and built-in c
   assert.ok(panel.textContent.includes('Executive problem analysis'));
   assert.ok(panel.textContent.includes('denied access'));
   assert.ok(panel.textContent.includes('Possible operational consequence'));
-  assert.equal(panel.querySelectorAll('.exec-summary-kpi').length,6);
+  assert.equal(panel.querySelectorAll('.exec-summary-kpi').length,9);
   assert.equal(panel.querySelectorAll('.exec-summary-kpi strong')[0].textContent,'1');
   assert.equal(panel.querySelectorAll('.exec-summary-kpi strong')[1].textContent,'1');
   const input=$('#exec-knowledge-query');input.value='0x80070005';input.dispatchEvent(new window.Event('input',{bubbles:true}));
@@ -317,8 +317,8 @@ test('executive problem analysis, evidence KPIs, knowledge search and built-in c
   assert.ok($('#exec-knowledge-list').textContent.includes('Matched in this selection'));
   const ids=app.state.imported.map(report=>report.id);
   click('#exec-run-validation');
-  assert.match($('#exec-validation-status').textContent,/55 \/ 55/);
-  assert.equal($('#exec-validation-results').querySelectorAll('tbody tr').length,55);
+  assert.match($('#exec-validation-status').textContent,/73 \/ 73/);
+  assert.equal($('#exec-validation-results').querySelectorAll('tbody tr').length,73);
   assert.deepEqual(app.state.imported.map(report=>report.id),ids);
   click('#exec-export');
   assert.ok((await downloads.at(-1).blob.text()).includes('Executive problem analysis'));

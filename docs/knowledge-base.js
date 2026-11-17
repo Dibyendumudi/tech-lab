@@ -1,3 +1,4 @@
+import { SOURCED_CODE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.0';
 /** Reviewed code meanings; an error meaning is not a confirmed root cause. */
 const ALL = ['Win32 apps','Windows patching','Conditional Access','Autopilot & ESP','Enterprise'];
 const item = (code,categories,title,meaning,check,resolution,severity='error') => ({id:'code-'+code.toLowerCase(),code,categories,title,meaning,check,resolution,severity});
@@ -28,5 +29,6 @@ export const EXTRA_KNOWLEDGE = [
   item('AADSTS50053',['Conditional Access'],'The sign-in was blocked by account protection','AADSTS50053 may indicate account lockout or a blocked sign-in associated with malicious IP activity. The sign-in failure reason distinguishes the cases.','Inspect the sign-in failure reason, risk and protection details for the same request.','Ask the identity security owner to review the protection event before proposing any account action.'),
   item('AADSTS50055',['Conditional Access'],'The sign-in password has expired','AADSTS50055 identifies an expired password.','Confirm the same sign-in failure reason and approved password-expiry process.','Direct the account owner through the organization’s existing password-update process.'),
   item('AADSTS50057',['Conditional Access'],'The sign-in account is disabled','AADSTS50057 indicates the user account is disabled. The reason for the account state is not established by this code.','Verify account lifecycle status and authorization with the identity owner.','Have the identity owner review intended account status; do not enable accounts automatically.'),
+  ...SOURCED_CODE_KNOWLEDGE,
   item('AADSTS500121',['Conditional Access'],'The authentication challenge was not completed','AADSTS500121 indicates failure during strong authentication. Challenge details are needed to distinguish denial, expiry and interruption.','Review authentication steps, challenge result and failure reason in the same sign-in.','Use the established MFA support process for the observed challenge outcome.')
 ];

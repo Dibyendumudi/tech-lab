@@ -1,8 +1,8 @@
 import { scenarios } from './scenarios.js';
-import { escapeHTML as e, initWorkflow } from './app.js?v=1.5.0';
-import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js?v=1.5.0';
-import { readDiagnosticFiles } from './importer.js?v=1.5.0';
-import { buildExecutiveSummary, executiveSummaryHTML, knowledgeBaseHTML } from './executive-summary.js';
+import { escapeHTML as e, initWorkflow } from './app.js?v=1.6.0';
+import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js?v=1.6.0';
+import { readDiagnosticFiles } from './importer.js?v=1.6.0';
+import { buildExecutiveSummary, executiveSummaryHTML, knowledgeBaseHTML } from './executive-summary.js?v=1.6.0';
 import { runValidationCases } from './validation-cases.js';
 
 const COLORS = { error: '#bc6871', warning: '#d6ab61', info: '#769ab7' };
@@ -39,6 +39,7 @@ export function chartBuckets(timeline, maximum = 30) {
 export function timelineSVG(data) {
   const values = chartBuckets(data.timeline);
   if (!values.length) return '<div class="exec-empty-state">No timestamped evidence in this selection.<span>Unspecified or local timestamps are kept out of the UTC timeline.</span></div>';
+  const plotted = values.reduce((sum, value) => sum + value.events, 0);
   const width=640, height=200, left=36, right=18, top=15, bottom=32;
   const plotWidth=width-left-right, plotHeight=height-top-bottom;
   const maximum = Math.max(4, Math.ceil(Math.max(...values.map(value=>value.events))/4)*4);
@@ -54,7 +55,7 @@ export function timelineSVG(data) {
     const label = data.timelineGranularity==='month' ? value.key.slice(0,7) : data.timelineGranularity==='hour' && data.timeline.length<=30 ? `${values[0].key.slice(0,10)!==values.at(-1).key.slice(0,10)?value.key.slice(8,10)+' / ':''}${value.key.slice(11,16)}` : value.key.slice(5,10);
     return `<text class="exec-axis-label" x="${x(index)}" y="${height-9}" text-anchor="middle">${e(label)}</text>`;
   }).join('');
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${data.metrics.eventsCount} recorded events. Teal shows all records and the lighter line shows result-stage records. Evidence timestamps are UTC."><defs><linearGradient id="exec-evidence-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#169aa1" stop-opacity=".15"/><stop offset="100%" stop-color="#169aa1" stop-opacity=".015"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#exec-evidence-fill)"/><polyline points="${points('results')}" fill="none" stroke="#afcfcc" stroke-width="2.5" stroke-dasharray="4 3"/><polyline points="${points('events')}" fill="none" stroke="#148f9b" stroke-width="2.5" stroke-linejoin="round"/>${values.map((value,index)=>`<circle cx="${x(index)}" cy="${y(value.events)}" r="4" fill="white" stroke="#148f9b" stroke-width="2"><title>${e(value.label)} UTC: ${value.events} evidence records, ${value.results} result-stage records</title></circle>`).join('')}${labels}</svg><details class="exec-chart-data"><summary>View chart data${data.timeline.length>30 ? ' · adjacent buckets grouped for display' : ''}</summary><table><thead><tr><th>Evidence bucket · UTC</th><th>Records</th><th>Result stage</th></tr></thead><tbody>${values.map(value=>`<tr><td>${e(value.label)}</td><td>${value.events}</td><td>${value.results}</td></tr>`).join('')}</tbody></table></details>`;
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${plotted} timestamped records shown out of ${data.metrics.eventsCount} recorded events. Teal shows all records and the lighter line shows result-stage records. Evidence timestamps are UTC."><defs><linearGradient id="exec-evidence-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#169aa1" stop-opacity=".15"/><stop offset="100%" stop-color="#169aa1" stop-opacity=".015"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#exec-evidence-fill)"/><polyline points="${points('results')}" fill="none" stroke="#afcfcc" stroke-width="2.5" stroke-dasharray="4 3"/><polyline points="${points('events')}" fill="none" stroke="#148f9b" stroke-width="2.5" stroke-linejoin="round"/>${values.map((value,index)=>`<circle cx="${x(index)}" cy="${y(value.events)}" r="4" fill="white" stroke="#148f9b" stroke-width="2"><title>${e(value.label)} UTC: ${value.events} evidence records, ${value.results} result-stage records</title></circle>`).join('')}${labels}</svg><details class="exec-chart-data"><summary>View chart data${data.timeline.length>30 ? ' · adjacent buckets grouped for display' : ''}</summary><table><thead><tr><th>Evidence bucket · UTC</th><th>Records</th><th>Result stage</th></tr></thead><tbody>${values.map(value=>`<tr><td>${e(value.label)}</td><td>${value.events}</td><td>${value.results}</td></tr>`).join('')}</tbody></table></details>`;
 }
 
 export function severityGradient(counts) {

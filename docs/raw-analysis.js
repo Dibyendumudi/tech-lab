@@ -1,6 +1,7 @@
 /** Local observations from imported text exports. Never executes a resolution. */
-import { CATEGORIES, sanitizeText } from './analytics.js?v=1.5.0';
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js';
+import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.0';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.0';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.0';
 
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;
@@ -55,16 +56,17 @@ function installerResult(event, value) {
   return new RegExp('\\b(?:lpExitCode|error\\s*code|exit\\s*(?:code)?|return(?:ed)?\\s*(?:code)?|msi\\s*(?:error|code)|installer\\s*(?:error|code|returned)|installer exited with code)\\s*(?:is\\b|was\\b|equals\\b|[=:])?\\s*' + value + '\\b', 'i').test(message);
 }
 function inferCategory(event) {
+  if (/^\s*(?:DeviceAuthStatus|AzureAdPrt)\s*:/im.test(text(event.message))) return 'Enterprise';
   if (CATEGORIES.includes(event.category) && event.category !== 'Enterprise') return event.category;
   const source = `${text(event.source)} ${text(event.provider)}`.toLowerCase();
   const message = text(event.message).toLowerCase();
-  const all = source + ' ' + message;
+  const all = source + ' ' + message + ' ' + (Array.isArray(event.codes) ? event.codes.join(' ') : '');
   if (/\baadsts\d+\b/.test(all)) return 'Conditional Access';
   if (/appworkload|intunemanagementextension|appactionprocessor/.test(source)) return 'Win32 apps';
   if (/conditional.?access|sign.?in|\bentra\b/.test(all)) return 'Conditional Access';
   if (/autopilot|enrollment status page|\besp\b|moderndeployment|provisioning-diagnostics|tpm attestation|0x80180014|0x80180018/.test(all)) return 'Autopilot & ESP';
-  if (/windowsupdate|windows update|updateorchestrator|cbs\.log|\bservicing\b|update ring|0x800f081f|0x800f0831|0x8024402c/.test(all)) return 'Windows patching';
-  if (/\bwin32\b|\bmsiexec\b|\bmsi\b|0x87d1041c|detection rule/.test(all)) return 'Win32 apps';
+  if (/windowsupdate|windows update|updateorchestrator|cbs\.log|\bservicing\b|update ring|0x800f081f|0x800f0831|0x8024[0-9a-f]{4}/.test(all)) return 'Windows patching';
+  if (/appxdeployment|appxpackaging|\bmsix\b|0x80073(?:cf3|d02|d06|d10)|\bwin32\b|\bmsiexec\b|\bmsi\b|0x87d1041c|detection rule/.test(all)) return 'Win32 apps';
   if (/enroll(?:ment|ing)\b.{0,100}\b(?:failed|failure|error)|\b(?:failed|failure|error)\b.{0,80}\benroll(?:ment|ing)?\b/.test(all)) return 'Autopilot & ESP';
   return 'Enterprise';
 }
@@ -111,8 +113,8 @@ function contextMismatch(event) {
 
 // A rule states what is observed and what remains unproven. No rule repairs it.
 const RULES = [];
-function rule(key, category, title, test, root, checks, recommendations, severity = 'warning', confidence = 'medium') {
-  RULES.push({ key, category, title, test, root, checks, recommendations, severity, confidence });
+function rule(key, category, title, test, root, checks, recommendations, severity = 'warning', confidence = 'medium', provenance = {}) {
+  RULES.push({ key, category, title, test, root, checks, recommendations, severity, confidence, ...provenance });
 }
 rule('win32-detection', 'Win32 apps', 'Win32 app not detected after installation', e => code(e, '0x87d1041c'),
   '0x87D1041C reports that the application was not detected after installation. It does not identify whether the detection condition, installed state or installer behavior caused the mismatch.',
@@ -200,12 +202,17 @@ rule('autopilot-network', 'Autopilot & ESP', 'Autopilot connectivity failure rec
 for (const entry of EXTRA_KNOWLEDGE) for (const category of entry.categories) {
   rule(entry.id + ':' + category, category, entry.title,
     event => code(event, entry.code),
-    entry.meaning, [entry.check], [entry.resolution], entry.severity, 'high');
+    entry.meaning, [entry.check], [entry.resolution], entry.severity, 'high', {reference:entry.reference, sourceId:entry.sourceId, reviewed:entry.reviewed});
+}
+for (const entry of STATE_KNOWLEDGE) {
+  rule(entry.id, 'Enterprise', entry.title, event => entry.pattern.test(event.message),
+    entry.meaning, [entry.check], [entry.resolution], entry.severity, 'high',
+    {reference:entry.reference, sourceId:entry.sourceId, reviewed:entry.reviewed});
 }
 export function getKnowledgeBase() {
   return RULES.map(item => ({id:item.key, category:item.category, title:item.title, meaning:item.root,
     checks:[...item.checks], recommendations:[...item.recommendations], severity:item.severity,
-    confidence:item.confidence, reference:DOCS[item.category] || 'https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes'}));
+    confidence:item.confidence, sourceId:item.sourceId, reviewed:item.reviewed, reference:item.reference || DOCS[item.category] || 'https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes'}));
 }
 function genericSeverity(event) {
   if (configurationOnly(event) || successOnly(event)) return null;
@@ -230,6 +237,7 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
     seenIds.add(uid);
     const sanitizedMessage = sanitizeText(rawMessage);
     const message = boundedMessage(sanitizedMessage);
+    const codes = extractCodes(message);
     if (originalMessage.length > MAX_MESSAGE || sanitizedMessage.length > MAX_MESSAGE || originalMessage.endsWith(TRUNCATION_SUFFIX)) truncatedMessages++;
     return {
       uid, source: safe(event.source) || 'Imported text', message,
@@ -238,7 +246,7 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
       event_id: event.event_id == null ? null : safe(event.event_id), provider: safe(event.provider), level: safe(event.level),
       // Classify only retained, visible evidence. A code discarded by a size
       // limit must not generate a finding whose supporting text is absent.
-      category: inferCategory({ ...event, message }), codes: extractCodes(message), correlation_ids: extractIds(event, rawMessage),
+      category: inferCategory({ ...event, message, codes }), codes, correlation_ids: extractIds(event, rawMessage),
       stage: inferStage(message), context: inferContext(message)
     };
   });
@@ -261,7 +269,7 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
       severity: item.severity, confidence: item.confidence, diagnosis: {type:'rule',rule_id:item.key},
       summary: `${item.title}. ${evidence.length} record(s) in this source/context match the documented pattern. Review the stated meaning and verification checks; repeated matches do not establish a common cause.`,
       root_cause: item.root, evidence, checks: item.checks, recommendations: item.recommendations,
-      references: DOCS[item.category] ? [DOCS[item.category]] : []
+      references: item.reference ? [item.reference] : DOCS[item.category] ? [DOCS[item.category]] : []
     });
   }
   const unresolved = new Map();
