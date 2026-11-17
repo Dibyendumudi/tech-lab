@@ -1,5 +1,8 @@
-import { scenarios } from './scenarios.js';
-import { casesFromReports, reportFromCase } from './guided-data.js?v=1.6.0';
+import { escapeHTML } from './utils.js?v=1.6.1';
+export { escapeHTML } from './utils.js?v=1.6.1';
+import { downloadBlob } from './downloads.js?v=1.6.1';
+import { scenarios } from './scenarios.js?v=1.6.1';
+import { casesFromReports, reportFromCase } from './guided-data.js?v=1.6.1';
 
 export const steps = [
   { label: 'Select case', hint: 'Choose the signal', title: 'Start with a specific incident.', action: 'Load sample logs →' },
@@ -9,9 +12,6 @@ export const steps = [
   { label: 'Review', hint: 'Validate the next step', title: 'Review before changing anything.', action: 'Export HTML report ↗' },
 ];
 
-export function escapeHTML(value) {
-  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-}
 const e = escapeHTML;
 const icon = { win32: '▦', patching: '↻', 'conditional-access': '◇', autopilot: '⌁' };
 
@@ -112,13 +112,8 @@ export function initWorkflow() {
       const report = state.report();
       const content = format === 'html' ? reportHTML(report) : JSON.stringify(report, null, 2);
       const blob = new Blob([content], { type: format === 'html' ? 'text/html;charset=utf-8' : 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `windows-diagnostics-${imported() ? 'investigation' : 'demo'}-${state.scenario.id}.${format}`;
-      document.body.append(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast(`${copy('Synthetic', 'Investigation')} ${format.toUpperCase()} report downloaded. No changes were applied.`);
+      downloadBlob(blob, `windows-diagnostics-${imported() ? 'investigation' : 'demo'}-${state.scenario.id}.${format}`);
+      toast(`${copy('Synthetic', 'Investigation')} ${format.toUpperCase()} report download started. No changes were applied.`);
     } catch (error) { toast(error.message); }
   }
   function renderStage() {

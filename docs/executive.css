@@ -284,3 +284,5 @@ details.exec-scope-note{display:block;font-size:9px;padding:13px 15px}
 .exec-archive-status.failed{color:#a45b61}
 @media(max-width:720px){.exec-archive-body{padding:0 14px 13px}.exec-archive-note,.exec-archive-counts{font-size:10px}.exec-archive>summary{font-size:11px;padding:12px}.exec-archive-meta{font-size:9px}.exec-archive-counts,.exec-archive-meta,.exec-archive-error{margin-left:12px;margin-right:12px}.exec-archive-state{font-size:8px}.exec-archive-coverage{margin-bottom:16px}}
 @media print{.exec-archive-coverage,.exec-archive{break-inside:auto}.exec-archive-body{padding:0 12px 12px}.exec-archive-table-scroll{max-height:none;overflow:visible}.exec-archive-table{min-width:0;font-size:8px}.exec-archive-table th,.exec-archive-table td{font-size:8px;padding:7px;position:static}.exec-archive-table tr{break-inside:avoid}.exec-archive-note,.exec-archive-counts,.exec-archive-error{font-size:9px}.exec-archive-meta{font-size:8px}}
+
+#exec-detail.exec-dialog-fallback[open]{display:block;position:fixed;inset:auto;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;max-height:85vh;overflow:auto}

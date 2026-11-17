@@ -1,20 +1,17 @@
+import { hashText, uniqueMessages } from './utils.js?v=1.6.1';
 /** Browser-local file decoding, raw evidence analysis and report validation. */
-import { parseReport, sanitizeText } from './analytics.js?v=1.6.0';
-import { parseRawLog } from './raw-parsers.js?v=1.6.0';
-import { analyzeRawEvents } from './raw-analysis.js?v=1.6.0';
-import { inspectCabinet, CAB_LIMITS } from './cab-format.js';
-import { extractCabEntries } from './cab-extractor.js';
+import { parseReport, sanitizeText } from './analytics.js?v=1.6.1';
+import { parseRawLog } from './raw-parsers.js?v=1.6.1';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.6.1';
+import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.1';
+import { extractCabEntries } from './cab-extractor.js?v=1.6.1';
 
 export const IMPORT_LIMITS = Object.freeze({ files: 20, fileBytes: 20 * 1024 * 1024, totalBytes: 50 * 1024 * 1024, rawEvents: 50000, events: 100000, findings: 3000 });
 export const IMPORT_EXTENSIONS = Object.freeze(['.cab', '.log', '.txt', '.json', '.jsonl', '.ndjson', '.csv', '.xml']);
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const extension = name => /\.[^.\\/]+$/.exec(String(name).toLowerCase())?.[0] || '';
 
-function fingerprint(value) {
-  let a = 2166136261, b = 2246822519;
-  for (let i = 0; i < value.length; i++) { a = Math.imul(a ^ value.charCodeAt(i), 16777619); b = Math.imul(b ^ value.charCodeAt(i), 3266489917); }
-  return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
-}
+const fingerprint = value => hashText(value, 'stable');
 
 function formatError(name) {
   const ext = extension(name);
@@ -79,10 +76,15 @@ export async function importDiagnosticFiles(selection) {
     return rejectSelection('Import limit: 100 MiB per CAB, 20 MiB per readable file; 150 MiB combined when selecting CABs, otherwise 50 MiB combined.');
   }
   const reports = [], errors = [], notices = [], archives = [], rawEvents = [], rawSources = [], rawWarnings = [], seen = new Set(), seenReports = new Set(), seenArchives = new Set(), unavailableSources = [];
-  const archiveSummaries = [], archiveDetails = [];
+  const archiveSummaries = new Map(), archiveDetails = [], reportArchives = new Map();
+  function associateArchive(report, archive) {
+    if (!archive) return;
+    if (!reportArchives.has(report)) reportArchives.set(report, new Set());
+    reportArchives.get(report).add(archive);
+  }
   let eventCount = 0, findingCount = 0, cabEntries = 0, cabExpandedBytes = 0, laterFiles = 0;
 
-  async function readEvidence(bytes, source, reservedSources = 1) {
+  async function readEvidence(bytes, source, reservedSources = 1, archive = null) {
     const label = sanitizeText(source), decoded = decodeLogBytes(bytes);
     const fileId = fingerprint(source + '\0' + decoded.text);
     if (seen.has(fileId)) return { status: 'duplicate', eventCount: 0, reason: 'Identical source content was already included in this selection.' };
@@ -94,13 +96,13 @@ export async function importDiagnosticFiles(selection) {
     let count, partial = false;
     if (reportCandidate(raw)) {
       const report = parseReport(raw, label);
-      if (seenReports.has(report.id)) return { status: 'duplicate', eventCount: 0, reason: 'An identical diagnostic report is already included in this selection.' };
+      if (seenReports.has(report.id)) { associateArchive(reports.find(item => item.id === report.id), archive); return { status: 'duplicate', eventCount: 0, reason: 'An identical diagnostic report is already included in this selection.' }; }
       if (reports.length >= 100) throw new Error('The selection reached the 100-report limit. This report was not loaded.');
       if (eventCount + report.events.length + rawEvents.length > IMPORT_LIMITS.events || findingCount + report.findings.length > IMPORT_LIMITS.findings - (rawEvents.length ? 1000 : 0)) {
         throw new Error('Selection exceeds the evidence or finding limit. Import a smaller set of reports.');
       }
       report.warnings.push(...decoded.warnings.map(sanitizeText));
-      reports.push(report); seenReports.add(report.id); eventCount += report.events.length; findingCount += report.findings.length; count = report.events.length;
+      reports.push(report); associateArchive(report, archive); seenReports.add(report.id); eventCount += report.events.length; findingCount += report.findings.length; count = report.events.length;
     } else {
       const remaining = Math.min(IMPORT_LIMITS.rawEvents - rawEvents.length, IMPORT_LIMITS.events - eventCount - rawEvents.length);
       if (remaining <= 0 || findingCount > IMPORT_LIMITS.findings - 1000) throw new Error('The 50,000-record raw evidence limit was reached; this source was not analyzed.');
@@ -129,8 +131,8 @@ export async function importDiagnosticFiles(selection) {
     }
     archive.complete = !archive.error && archive.entryCount > 0 && archive.analyzed === archive.entryCount;
     const summary = `${archive.name}: ${archive.entryCount} archive entries; ${archive.analyzed} analyzed, ${archive.partial} partial, ${archive.skipped} skipped, ${archive.failed} failed, ${archive.duplicates} duplicates. Opening an archive does not establish complete device coverage.`;
-    notices.push(summary); archiveSummaries.push(summary);
-    if (archive.error) archiveSummaries.push(`${archive.name}: ${archive.error}`);
+    notices.push(summary); archiveSummaries.set(archive, [summary]);
+    if (archive.error) archiveSummaries.get(archive).push(`${archive.name}: ${archive.error}`);
     for (const row of archive.entries) if (row.status !== 'analyzed') {
       const source = `${archive.name} / ${row.name}`;
       archiveDetails.push(`${source}: ${row.status}. ${row.reason}`);
@@ -176,7 +178,7 @@ export async function importDiagnosticFiles(selection) {
           if (!(entry.bytes instanceof Uint8Array) || entry.bytes.byteLength !== original.size || entry.bytes.byteLength > IMPORT_LIMITS.fileBytes) throw new Error('Extracted data does not match the bounded CAB file size.');
           const source = `${file.name} / ${original.name}`;
           const unread = archive.entries.filter(item => item.status === 'pending').length;
-          Object.assign(row, await readEvidence(entry.bytes, source, unread + laterFiles));
+          Object.assign(row, await readEvidence(entry.bytes, source, unread + laterFiles, archive));
         } catch (error) {
           row.status = /no .*records|does not contain supported|no windows event|requires named|contains no readable|empty/i.test(error.message) ? 'skipped' : 'failed';
           row.reason = sanitizeText(error.message || 'Could not analyze this archive member.');
@@ -210,10 +212,13 @@ export async function importDiagnosticFiles(selection) {
       analysis.sources.push(...unavailableSources);
       analysis.warnings.push(...archiveDetails.slice(0, 200));
       if (archiveDetails.length > 200) analysis.warnings.push(`${archiveDetails.length - 200} additional archive entry notices are listed in the full CAB coverage inventory.`);
-      reports.push(parseReport(analysis, rawSources.length === 1 ? rawSources[0] : `Raw logs · ${rawSources.length} files`));
+      const report = parseReport(analysis, rawSources.length === 1 ? rawSources[0] : `Raw logs · ${rawSources.length} files`);
+      reports.push(report);
+      // Combined raw evidence retains selection-wide gaps, including unread CABs.
+      for (const archive of archives) associateArchive(report, archive);
     } catch (error) { errors.push(`Raw log analysis: ${sanitizeText(error.message || 'Could not analyze the selected records.')}`); }
   }
-  for (const report of reports) report.warnings.push(...archiveSummaries);
+  for (const report of reports) report.warnings = uniqueMessages([...report.warnings, ...[...(reportArchives.get(report) || [])].flatMap(archive => archiveSummaries.get(archive) || [])]);
   return { reports: [...new Map(reports.map(report => [report.id, report])).values()], errors, notices, archives };
 }
 
@@ -224,7 +229,7 @@ export function readDiagnosticFiles(files) {
     let worker, timeout;
     const finish = (callback, value) => { clearTimeout(timeout); worker?.terminate(); callback(value); };
     try {
-      worker = new Worker(new URL('./import-worker.js?v=1.6.0', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./import-worker.js?v=1.6.1', import.meta.url), { type: 'module' });
       timeout = setTimeout(() => finish(reject, new Error('Import timed out. Select fewer files or a smaller export.')), 180000);
       worker.onmessage = event => event.data.error ? finish(reject, new Error(event.data.error)) : finish(resolve, event.data.result);
       worker.onerror = () => finish(reject, new Error('The local import worker could not start. Refresh the page and try again. No files were uploaded.'));

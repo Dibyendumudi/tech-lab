@@ -1,7 +1,7 @@
-import { buildDiagnosticKPIs } from './diagnostic-kpis.js?v=1.6.0';
+import { escapeHTML as e, reportWarnings } from './utils.js?v=1.6.1';
+import { buildDiagnosticKPIs } from './diagnostic-kpis.js?v=1.6.1';
 /** Evidence-based management narrative. All quantities describe the visible records. */
-import { getKnowledgeBase } from './raw-analysis.js?v=1.6.0';
-const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+import { getKnowledgeBase } from './raw-analysis.js?v=1.6.1';
 const uniq = values => [...new Set(values)];
 const stages = ['assignment','policy','execution','result'];
 const owners = {
@@ -69,7 +69,7 @@ export function buildExecutiveSummary(data, archives=[]) {
   if(observed.length<4&&events.length)limitations.push(`Lifecycle stages not observed in this selection: ${stages.filter(stage=>!observed.includes(stage)).join(', ')}.`);
   if(archives.length)limitations.push(`Latest CAB inventory: ${archive.analyzed} analyzed, ${archive.partial} partial, ${archive.skipped} skipped, ${archive.failed} failed entries. The inventory describes the latest import and is independent of filters and selected dataset.`);
   if(archives.some(archive=>archive.error))limitations.push('At least one CAB could not be inventoried; file coverage is unknown for that archive.');
-  const warningCount=uniq((data.reports || []).flatMap(report=>report.warnings || [])).length;
+  const warningCount=reportWarnings(data.reports || []).length;
   if(warningCount)limitations.push(`${warningCount} supplied import/analysis limitation(s) remain in Scope and limitations; review them before a decision.`);
   if(synthetic)limitations.push(`${synthetic} visible report(s) contain synthetic demonstration evidence. Do not treat them as operational outcomes.`);
   const unexplained=[...unresolved].filter(id=>!explained.has(id)).length;
@@ -88,7 +88,7 @@ export function buildAnalysisReadiness(data, metrics = {}) {
   const events = data.events || [], sources = data.sourceCoverage || [];
   const timed = events.filter(event => event.timestamp).length;
   const missing = sources.filter(source => source.available === false).length;
-  const warnings = uniq((data.reports || []).flatMap(report => report.warnings || []));
+  const warnings = reportWarnings(data.reports || []);
   const gaps = warnings.filter(warning => /truncat|showing the first|only the first|limit was reached|records? (?:were |was )?(?:omitted|skipped)|skipped malformed|additional invalid|only part of this source/i.test(warning));
   const checks = [
     {name:'Evidence present', status:events.length ? 'Available' : 'Missing', detail:`${events.length} record(s) in the current filters.`},

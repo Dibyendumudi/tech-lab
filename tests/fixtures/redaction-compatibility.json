@@ -1,0 +1,22 @@
+[
+  {
+    "value": "2001:db8::1, ::1; fe80::1",
+    "expected": "2001:db8::1, [ip:15bec48cfa]; fe80::1"
+  },
+  {
+    "value": "A=2001:db8:0000:0000:0000:0000:0000:0001 B=192.0.2.1",
+    "expected": "A=[ip:9aa348b72c] B=[ip:05ecbdd89e]"
+  },
+  {
+    "value": "prefix2001:db8::1 not:an:ipv6:name",
+    "expected": "prefix2001:db8::1 not:an:ipv6:name"
+  },
+  {
+    "value": "https://[2001:db8::2]:443/path",
+    "expected": "https://[2001:db8::2]:443/path"
+  },
+  {
+    "value": "ActivityId=synthetic-operation UserName=synthetic-user",
+    "expected": "ActivityId=[id:c3f87d2c9f] UserName=[id:0e1dd9dc1c]"
+  }
+]

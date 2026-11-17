@@ -1,3 +1,4 @@
+import { hashText, last, hasOwn as own } from './utils.js?v=1.6.1';
 // Local, bounded readers for Windows text exports. No network, storage, or execution.
 const MAX_TEXT = 20 * 1024 * 1024;
 const MAX_EVENTS = 50_000;
@@ -5,7 +6,6 @@ const MAX_MESSAGE = 20_000;
 const EXTENSIONS = new Set(['log', 'txt', 'json', 'jsonl', 'ndjson', 'csv', 'xml']);
 const KEY = value => String(value).replace(/[\s_@#-]/g, '').toLowerCase();
 const OBJECT = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-const own = (value, name) => Object.prototype.hasOwnProperty.call(value, name);
 const GUID = /\b[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}\b/gi;
 const CODE = /\b(?:0x[\da-f]{8}|AADSTS\d{5,8})\b/gi;
 const STAMP = /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b/i;
@@ -27,15 +27,7 @@ function short(value, maximum = MAX_MESSAGE) {
   const suffix = ' [message truncated]';
   return text.length > maximum ? text.slice(0, maximum - suffix.length) + suffix : text;
 }
-function hash(value) {
-  let a = 0x811c9dc5;
-  let b = 0x9e3779b9;
-  for (let i = 0; i < value.length; i++) {
-    a = Math.imul(a ^ value.charCodeAt(i), 0x01000193);
-    b = Math.imul(b ^ value.charCodeAt(i), 0x85ebca6b);
-  }
-  return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
-}
+const hash = value => hashText(value, 'parser');
 function timestamp(value) {
   value = scalar(value);
   if (typeof value !== 'string' && typeof value !== 'number') return null;
@@ -66,7 +58,7 @@ function timestamp(value) {
 }
 function category(source, message) {
   const text = (source + ' ' + message).toLowerCase();
-  const filename = source.replace(/\\/g, '/').split('/').at(-1).toLowerCase();
+  const filename = last(source.replace(/\\/g, '/').split('/')).toLowerCase();
   if (/\baadsts\d+\b/.test(text)) return 'Conditional Access';
   if (/appworkload|intunemanagementextension|appactionprocessor|appxdeployment|appxpackaging/.test(filename) || /0x80073(?:cf3|d02|d06|d10)\b/i.test(message)) return 'Win32 apps';
   if (/0x8024[0-9a-f]{4}\b/i.test(message)) return 'Windows patching';
@@ -278,7 +270,7 @@ function parseXML(text, emit) {
   const advance = end => { for (let i = position; i < end; i++) if (text[i] === '\n') line++; position = end; };
   const addText = (value, cdata = false) => {
     if (!stack.length && value.trim()) fail('text outside the root element.');
-    if (stack.length && activeEvent) stack.at(-1).text = short(stack.at(-1).text + (cdata ? value : xmlEntities(value)));
+    if (stack.length && activeEvent) last(stack).text = short(last(stack).text + (cdata ? value : xmlEntities(value)));
     else if (!cdata) xmlEntities(value);
   };
   while (position < text.length) {
@@ -324,10 +316,10 @@ function parseXML(text, emit) {
     const body = text.slice(position + 1, end);
     if (body.startsWith('/')) {
       const match = /^\/([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\s*$/.exec(body);
-      if (!match || !stack.length || stack.at(-1).name !== match[1]) fail('mismatched closing tag.');
+      if (!match || !stack.length || last(stack).name !== match[1]) fail('mismatched closing tag.');
       const node = stack.pop();
       if (node === activeEvent) { emit(xmlRecord(node), node.line); activeEvent = null; count++; }
-      else if (stack.length && activeEvent) stack.at(-1).text = short(stack.at(-1).text + node.text);
+      else if (stack.length && activeEvent) last(stack).text = short(last(stack).text + node.text);
       advance(end + 1); continue;
     }
     const match = /^([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)([\s\S]*)$/.exec(body);
@@ -341,7 +333,7 @@ function parseXML(text, emit) {
       attrs[attr[1]] = xmlEntities(attr[2] ?? attr[3]);
       remainder = remainder.slice(attr[0].length);
     }
-    const ns = Object.assign(Object.create(null), stack.at(-1)?.ns || {xml: 'http://www.w3.org/XML/1998/namespace'});
+    const ns = Object.assign(Object.create(null), last(stack)?.ns || {xml: 'http://www.w3.org/XML/1998/namespace'});
     for (const [key, value] of Object.entries(attrs)) {
       if (key === 'xmlns') {
         if (value === 'http://www.w3.org/2000/xmlns/' || value === 'http://www.w3.org/XML/1998/namespace') fail('invalid default namespace.');
@@ -363,12 +355,12 @@ function parseXML(text, emit) {
       expandedAttrs.add(expanded);
     }
     if (!stack.length && ++roots > 1) fail('multiple root elements.');
-    const node = {name, local: name.split(':').at(-1), attrs, ns, children: [], text: '', line};
+    const node = {name, local: last(name.split(':')), attrs, ns, children: [], text: '', line};
     if (node.local === 'Event') {
       if (activeEvent) fail('nested Event elements are unsupported.');
       activeEvent = node;
       eventNodes = 0;
-    } else if (activeEvent && stack.length) stack.at(-1).children.push(node);
+    } else if (activeEvent && stack.length) last(stack).children.push(node);
     if (activeEvent && ++eventNodes > 20_000) fail('an Event record contains too many elements; split or simplify the export.');
     if (selfClosing) {
       if (node === activeEvent) { emit(xmlRecord(node), node.line); activeEvent = null; count++; }
@@ -407,7 +399,7 @@ function parseText(text, emit) {
 export function parseRawLog(text, filename, options = {}) {
   if (typeof text !== 'string') throw new Error('Import requires decoded text. Choose a supported text log or event export.');
   if (typeof filename !== 'string' || !filename.trim() || filename.length > 1024) throw new Error('A valid log filename is required.');
-  const extension = filename.replace(/\\/g, '/').split('/').at(-1).split('.').at(-1).toLowerCase();
+  const extension = last(last(filename.replace(/\\/g, '/').split('/')).split('.')).toLowerCase();
   if (!EXTENSIONS.has(extension)) throw new Error('Unsupported file type. Import .log, .txt, .json, .jsonl, .ndjson, .csv, or Windows Event .xml. Extract CAB files first; native EVTX and ETL need text export.');
   if (text.length > MAX_TEXT) throw new Error('File exceeds the 20 MiB text import limit. Split the export into smaller files.');
   text = text.replace(/^\uFEFF/, '');

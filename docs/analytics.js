@@ -1,3 +1,4 @@
+import { hashText, last as lastItem, hasOwn as OWN } from './utils.js?v=1.6.1';
 /**
  * Local executive analytics for Windows Diagnostics. No device calls or mutations.
  *
@@ -21,20 +22,12 @@ export const STAGES = Object.freeze(['assignment', 'policy', 'execution', 'resul
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;
 const MAX_TEXT = 20000;
-const OWN = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const str = value => typeof value === 'string' ? value.slice(0, MAX_TEXT) : '';
 
 // Stable, deterministic pseudonyms keep repeated identifiers linkable locally.
 // This heuristic is not a guarantee of anonymization; review before sharing.
-function hash(value) {
-  let a = 2166136261, b = 2246822519;
-  for (let i = 0; i < value.length; i++) {
-    a = Math.imul(a ^ value.charCodeAt(i), 16777619);
-    b = Math.imul(b ^ value.charCodeAt(i), 3266489917);
-  }
-  return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
-}
+const hash = value => hashText(value, 'stable');
 const pseudonym = (kind, value) => `[${kind}:${hash(value.toLowerCase()).slice(0, 10)}]`;
 export function sanitizeText(value) {
   return str(value)
@@ -50,7 +43,7 @@ export function sanitizeText(value) {
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, value => pseudonym('email', value))
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, value => pseudonym('id', value))
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, value => value.split('.').every(part => Number(part) <= 255) ? pseudonym('ip', value) : value)
-    .replace(/(?<![\w:])(?:[0-9a-f]{1,4}:){4,}[0-9a-f:]*|(?<![\w:])(?:[0-9a-f]{1,4}:)*:[0-9a-f:]*:[0-9a-f:]+/gi, value => pseudonym('ip', value))
+    .replace(/(^|[^\w:])((?:[0-9a-f]{1,4}:){4,}[0-9a-f:]*|(?:[0-9a-f]{1,4}:)*:[0-9a-f:]*:[0-9a-f:]+)/gi, (match, prefix, value) => prefix + pseudonym('ip', value))
     .replace(/(\b[A-Z]:[\\/]Users[\\/]|\/(?:Users|home)\/)([^\\/\s"'<>]+)/gi, (match, prefix, user) => user.startsWith('[') ? match : prefix + pseudonym('user', user));
 }
 function textList(value) {
@@ -263,7 +256,7 @@ export function buildDashboard(inputReports, filters = {}) {
   // never allocates an unbounded sequence of empty buckets.
   if (buckets.size > 1) {
     const keys = [...buckets.keys()].sort();
-    const first = new Date(keys[0]), last = new Date(keys.at(-1));
+    const first = new Date(keys[0]), last = new Date(lastItem(keys));
     const bucketCount = timelineGranularity === 'hour' ? (last - first) / 3600000 + 1 : timelineGranularity === 'day' ? (last - first) / 86400000 + 1 : (last.getUTCFullYear() - first.getUTCFullYear()) * 12 + last.getUTCMonth() - first.getUTCMonth() + 1;
     const limit = { hour: 49, day: 91, month: 120 }[timelineGranularity];
     if (bucketCount <= limit) {
@@ -320,7 +313,7 @@ export function buildDashboard(inputReports, filters = {}) {
     timeline: [...buckets.values()].sort((a, b) => a.key.localeCompare(b.key)), timelineGranularity,
     sourceCoverage,
     priorityFindings: [...findings].sort((a, b) => ({ error: 0, warning: 1, info: 2 }[a.severity] - { error: 0, warning: 1, info: 2 }[b.severity])).map(finding => ({ ...finding, events: evidenceFor(finding).filter(event => eligibleIds.has(event.id)), reportLabel: reportMap.get(finding.reportId)?.label || 'Imported report' })),
-    coverage, dateRange: { from: sourceTimes[0]?.slice(0, 10) || '', to: sourceTimes.at(-1)?.slice(0, 10) || '' },
+    coverage, dateRange: { from: sourceTimes[0]?.slice(0, 10) || '', to: lastItem(sourceTimes)?.slice(0, 10) || '' },
     notes, filters: { category, severity, from: from === null ? '' : filters.from, to: to === null ? '' : filters.to, query: str(filters.query).trim() }
   };
 }

@@ -1,7 +1,8 @@
+import { hashText } from './utils.js?v=1.6.1';
 /** Local observations from imported text exports. Never executes a resolution. */
-import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.0';
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.0';
-import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.0';
+import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.1';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.1';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.1';
 
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;
@@ -23,14 +24,7 @@ const text = value => typeof value === 'string' ? value : value == null ? '' : S
 const safe = value => sanitizeText(text(value)).slice(0, MAX_MESSAGE);
 const boundedMessage = value => value.length > MAX_MESSAGE ? value.slice(0, MAX_MESSAGE - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX : value;
 const unique = values => [...new Set(values)];
-function hash(value) {
-  let a = 2166136261, b = 2246822519;
-  for (const character of value) {
-    a = Math.imul(a ^ character.charCodeAt(0), 16777619);
-    b = Math.imul(b ^ character.charCodeAt(0), 3266489917);
-  }
-  return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
-}
+const hash = value => hashText(value, 'analysis');
 const has = (event, pattern) => pattern.test(event.message);
 const code = (event, value) => event.codes.some(item => item.toLowerCase() === value.toLowerCase());
 function signalText(message) {

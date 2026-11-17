@@ -1,0 +1,68 @@
+{
+  "stable": [
+    {
+      "value": "",
+      "expected": "811c9dc585ebca77"
+    },
+    {
+      "value": "sample.log",
+      "expected": "7bc0a47bba107d0f"
+    },
+    {
+      "value": "Résumé 🚀",
+      "expected": "fdb24edb13e59acf"
+    },
+    {
+      "value": "\ud800x",
+      "expected": "7f62f125da04fa57"
+    },
+    {
+      "value": "🚀",
+      "expected": "4b328e383ea6f91a"
+    }
+  ],
+  "parser": [
+    {
+      "value": "",
+      "expected": "811c9dc59e3779b9"
+    },
+    {
+      "value": "sample.log",
+      "expected": "7bc0a47bbb2180ef"
+    },
+    {
+      "value": "Résumé 🚀",
+      "expected": "fdb24edb37dc37c7"
+    },
+    {
+      "value": "\ud800x",
+      "expected": "7f62f125df3105f9"
+    },
+    {
+      "value": "🚀",
+      "expected": "4b328e3824ee7be4"
+    }
+  ],
+  "analysis": [
+    {
+      "value": "",
+      "expected": "811c9dc585ebca77"
+    },
+    {
+      "value": "sample.log",
+      "expected": "7bc0a47bba107d0f"
+    },
+    {
+      "value": "Résumé 🚀",
+      "expected": "5c5b3419a5d1f77b"
+    },
+    {
+      "value": "\ud800x",
+      "expected": "7f62f125da04fa57"
+    },
+    {
+      "value": "🚀",
+      "expected": "378225687ae5a7a2"
+    }
+  ]
+}

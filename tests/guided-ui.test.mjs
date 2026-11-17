@@ -329,3 +329,36 @@ test('executive problem analysis, evidence KPIs, knowledge search and built-in c
   assert.ok($('#exec-problem-analysis').textContent.includes('No diagnostic evidence in this selection'));
   assert.equal($('#exec-problem-analysis').querySelectorAll('.exec-summary-issue').length,0);
 });
+
+test('dynamic charts expose contextual names and selected filter states',t=>{
+  const {$,click}=mount(t);
+  for(const bar of $('.exec-stage-grid').querySelectorAll('.exec-stage-meter')){
+    assert.equal(bar.getAttribute('role'),'img');
+    assert.match(bar.getAttribute('aria-label'),/observed records/);
+  }
+  assert.match($('.exec-stack-track').getAttribute('aria-label'),/Win32 apps:/);
+  click('[data-exec-category="Win32 apps"]');
+  assert.equal($('[data-exec-category="Win32 apps"]').getAttribute('aria-pressed'),'true');
+  assert.match($('[data-exec-severity="error"]').getAttribute('aria-label'),/Filter Error findings: 1 of 1/);
+  click('[data-exec-severity="error"]');
+  assert.equal($('[data-exec-severity="error"]').getAttribute('aria-pressed'),'true');
+});
+test('finding details remain usable when native dialog methods are unavailable',t=>{
+  const {$,click}=mount(t);
+  const dialog=$('#exec-detail');dialog.showModal=undefined;dialog.close=undefined;
+  const trigger=$('#exec-problem-analysis [data-exec-finding]');
+  const focus=t.mock.method(trigger,'focus',()=>{});
+  click('#exec-problem-analysis [data-exec-finding]');
+  assert.equal(dialog.hasAttribute('open'),true);
+  assert.equal(dialog.getAttribute('role'),'dialog');
+  assert.ok(dialog.getAttribute('aria-labelledby'));
+  click('#exec-close-detail');assert.equal(dialog.hasAttribute('open'),false);
+  assert.equal(focus.mock.callCount(),1);
+});
+test('export failures show an error instead of announcing a successful download',t=>{
+  const {$,click}=mount(t);
+  t.mock.method(URL,'createObjectURL',()=>{throw new Error('Export allocation failed');});
+  click('#exec-export');
+  assert.match($('#exec-import-status').textContent,/Export could not start/);
+  assert.ok($('#exec-import-status').classList.contains('error'));
+});
