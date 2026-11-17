@@ -362,3 +362,28 @@ test('export failures show an error instead of announcing a successful download'
   assert.match($('#exec-import-status').textContent,/Export could not start/);
   assert.ok($('#exec-import-status').classList.contains('error'));
 });
+
+test('dashboard gauges describe reported evidence and clear unavailable metrics', async t=>{
+  const {$,app,change}=mount(t);
+  assert.equal($('#exec-gauges').querySelectorAll('[role="img"]').length,3);
+  assert.match($('#exec-gauges').textContent,/Supplied finding ratings/);
+  assert.doesNotMatch($('#exec-gauges').textContent,/validated rules/);
+  assert.match($('#exec-source-treemap [role="img"]').getAttribute('aria-label'),/AppWorkload.log: 5 records/);
+  assert.match($('#exec-density-heatmap [role="img"]').getAttribute('aria-label'),/records/);
+  await app.importFiles([reportFile()]);
+  assert.match($('#exec-gauges').textContent,/1 \/ 1 findings rated high or medium/);
+  change('#exec-category','Windows patching');
+  assert.equal($('#exec-gauges').querySelectorAll('.exec-gauge-val')[1].textContent,'—');
+  assert.equal($('#exec-source-treemap').textContent,'');
+  assert.equal($('#exec-density-heatmap').textContent,'');
+});
+
+test('theme toggle exposes and updates its selected state',t=>{
+  const {$,click,document}=mount(t);
+  const before=document.body.classList.contains('dark-theme');
+  click('#exec-theme-toggle');
+  assert.equal(document.body.classList.contains('dark-theme'),!before);
+  assert.equal($('#exec-theme-toggle').getAttribute('aria-pressed'),String(!before));
+  click('#exec-theme-toggle');
+  assert.equal(document.body.classList.contains('dark-theme'),before);
+});

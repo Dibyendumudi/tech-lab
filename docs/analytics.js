@@ -1,4 +1,4 @@
-import { hashText, last as lastItem, hasOwn as OWN } from './utils.js?v=1.6.1';
+import { hashText, last as lastItem, hasOwn as OWN } from './utils.js?v=1.6.2';
 /**
  * Local executive analytics for Windows Diagnostics. No device calls or mutations.
  *

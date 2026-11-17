@@ -35,3 +35,9 @@ Version 1.6.1 improves browser compatibility, exports and accessibility. The UI 
 Exports retain their Blob URLs for the lifetime of the document so delayed browser Save dialogs can still use them. Closing or reloading the page releases those resources; repeated exports retain their data in memory until then. Failed export handoffs release their URL immediately. Browser API guidance: [Blob URL lifecycle](https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/blob).
 
 Archive summaries are scoped to the native reports that came from each CAB. Combined raw investigations retain selection-wide coverage limitations, including unread CABs. Relevant warnings stay in individual exports; combined dashboard/brief views deduplicate identical messages. Regression tests exercise missing modern JS APIs, export lifecycle, legacy ID stability, scoped archive notices, contextual chart names and dialog fallback. These checks do not certify every historical Safari/Chrome build.
+
+### v1.6.2 executive dashboard update
+
+Integrates the recovered dashboard design on top of v1.6.1: persistent dark/light theme, source inventory and UTC evidence gauges, supplied confidence ratings, proportional source distribution, evidence activity density, and stage counts relative to the peak stage. Gauges describe the current selection, not endpoint health or independently validated root causes. Empty denominators show an em dash. The evidence sparkline uses timed records; other KPI badges describe scope rather than invented trends.
+
+`docs/dashboard-showcase.html` is an explicitly labelled, synthetic design showcase. Its Tailwind utilities are precompiled into `docs/showcase.css`, so no third-party runtime script is needed. Rebuild with `npx --yes --package tailwindcss@3.4.17 tailwindcss --content ./docs/dashboard-showcase.html --output ./docs/showcase.css --minify`.

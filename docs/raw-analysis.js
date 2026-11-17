@@ -1,8 +1,8 @@
-import { hashText } from './utils.js?v=1.6.1';
+import { hashText } from './utils.js?v=1.6.2';
 /** Local observations from imported text exports. Never executes a resolution. */
-import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.1';
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.1';
-import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.1';
+import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.2';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.2';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.2';
 
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;

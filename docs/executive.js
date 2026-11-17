@@ -1,11 +1,11 @@
-import { escapeHTML as e, hasOwn, last, formatNumber as number, uniqueMessages, reportWarnings } from './utils.js?v=1.6.1';
-import { downloadBlob } from './downloads.js?v=1.6.1';
-import { scenarios } from './scenarios.js?v=1.6.1';
-import { initWorkflow } from './app.js?v=1.6.1';
-import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js?v=1.6.1';
-import { readDiagnosticFiles } from './importer.js?v=1.6.1';
-import { buildExecutiveSummary, executiveSummaryHTML, knowledgeBaseHTML } from './executive-summary.js?v=1.6.1';
-import { runValidationCases } from './validation-cases.js?v=1.6.1';
+import { escapeHTML as e, hasOwn, last, formatNumber as number, uniqueMessages, reportWarnings } from './utils.js?v=1.6.2';
+import { downloadBlob } from './downloads.js?v=1.6.2';
+import { scenarios } from './scenarios.js?v=1.6.2';
+import { initWorkflow } from './app.js?v=1.6.2';
+import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js?v=1.6.2';
+import { readDiagnosticFiles } from './importer.js?v=1.6.2';
+import { buildExecutiveSummary, executiveSummaryHTML, knowledgeBaseHTML } from './executive-summary.js?v=1.6.2';
+import { runValidationCases } from './validation-cases.js?v=1.6.2';
 
 const COLORS = { error: '#bc6871', warning: '#d6ab61', info: '#769ab7' };
 const LABELS = { error: 'Error / high / critical', warning: 'Warning / medium', info: 'Informational / low' };
@@ -111,10 +111,59 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
     closeDetail();setView('workflow');
   }
   function setView(view){const dashboard=view==='dashboard';$('executive-view').hidden=!dashboard;$('workflow-view').hidden=dashboard;$('scenario-group').hidden=dashboard;document.querySelectorAll('[data-exec-view]').forEach(button=>{const active=button.dataset.execView===view;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});}
+  function renderGauges(data){
+    const el=$('exec-gauges');
+    if(!el)return;
+    const totalSources=data.sourceCoverage.length;
+    const observedSources=data.sourceCoverage.filter(s=>s.eventCount>0).length;
+    const covPct=Math.min(100,Math.round(observedSources/(totalSources||1)*100));
+    const totalEvents=data.events.length;
+    const timedEvents=data.events.filter(e=>e.timestamp).length;
+    const timedPct=Math.min(100,Math.round(timedEvents/(totalEvents||1)*100));
+    const totalFindings=data.metrics.findingsCount;
+    const highConf=data.findings.filter(f=>['high','medium'].includes(String(f.confidence).toLowerCase())).length;
+    const confPct=Math.min(100,Math.round(highConf/(totalFindings||1)*100));
+    const gaugeItem=(label,pct,color,desc,hint)=>{
+      const circ=113;
+      const offset=Math.max(0,Math.round(circ*(1-(pct||0)/100)));
+      return `<article class="exec-gauge-card"><div class="exec-gauge-top"><svg viewBox="0 0 100 58" class="exec-gauge-svg" role="img" aria-label="${e(label)}: ${pct===null?'not available':pct+'%'}; ${e(desc)}"><path class="gauge-track" d="M 14 52 A 36 36 0 0 1 86 52" fill="none" stroke-width="8"/><path class="gauge-fill" d="M 14 52 A 36 36 0 0 1 86 52" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/><text x="50" y="48" text-anchor="middle" class="exec-gauge-val">${pct===null?'—':pct+'%'}</text></svg><div class="exec-gauge-meta"><strong class="exec-gauge-title">${e(label)}</strong><span class="exec-gauge-desc">${e(desc)}</span></div></div><p class="exec-gauge-hint">${e(hint)}</p></article>`;
+    };
+    el.innerHTML=[
+      gaugeItem('Listed sources with records',totalSources?covPct:null,'#087f7c',`${observedSources} / ${totalSources} sources active`,'Inventory presence only; collection completeness is unknown'),
+      gaugeItem('Timed UTC evidence',totalEvents?timedPct:null,'#4779c8',`${timedEvents} / ${totalEvents} records timed`,'Records eligible for chronological correlation'),
+      gaugeItem('Reported confidence',totalFindings?confPct:null,'#51a99c',`${highConf} / ${totalFindings} findings rated high or medium`,'Supplied finding ratings; not independent validation or a health score')
+    ].join('');
+  }
+  function renderTreemap(data){
+    const el=$('exec-source-treemap');
+    if(!el)return;
+    const observed=data.sourceCoverage.filter(s=>s.eventCount>0);
+    const total=observed.reduce((sum,s)=>sum+s.eventCount,0);
+    if(!total){el.innerHTML='';return;}
+    const colors=['#087f7c','#4779c8','#51a99c','#d3a34b','#7a69a5','#6d91c1','#c3646d','#8190a2'];
+    el.innerHTML=`<div class="exec-treemap-label"><span>SOURCE RECORD DISTRIBUTION</span><strong>${observed.length} ACTIVE SOURCES · ${total} EVENTS</strong></div><div class="exec-treemap-track" role="img" aria-label="${e(observed.map(s=>`${s.name}: ${s.eventCount} records`).join('; '))}">${observed.map((s,idx)=>{
+      const w=(s.eventCount/total*100).toFixed(3);
+      const color=colors[idx%colors.length];
+      return `<span class="exec-treemap-bar" style="flex:${s.eventCount} 1 0;min-width:0;background:${color}" title="${e(s.name)}: ${s.eventCount} records (${w}%)">${parseFloat(w)>12?`<small>${e(s.name.slice(0,16))}</small>`:''}</span>`;
+    }).join('')}</div>`;
+  }
+  function renderDensityHeatmap(data){
+    const el=$('exec-density-heatmap');
+    if(!el)return;
+    const buckets=chartBuckets(data.timeline,24);
+    if(!buckets.length){el.innerHTML='';return;}
+    const max=Math.max(1,...buckets.map(b=>b.events));
+    const colors=['#eef2f7','#a4ded6','#52bdb1','#148f9b','#087f7c'];
+    el.innerHTML=`<div class="exec-heatmap-row"><span class="exec-heatmap-title">Activity density:</span><div class="exec-heatmap-cells" role="img" aria-label="${e(buckets.map(b=>`${b.label}: ${b.events} records`).join('; '))}">${buckets.map(b=>{
+      const idx=b.events===0?0:Math.min(4,Math.ceil((b.events/max)*4));
+      return `<span class="exec-heatmap-cell" style="background:${colors[idx]}" title="${e(b.label)}: ${b.events} records"></span>`;
+    }).join('')}</div><span class="exec-heatmap-legend">Peak: ${max}</span></div>`;
+  }
   function resetFilters(){state.filters={category:'all',severity:'all',from:'',to:'',query:''};for(const [key,id] of Object.entries({category:'exec-category',severity:'exec-severity',from:'exec-from',to:'exec-to',query:'exec-search'}))$(id).value=state.filters[key];}
   function render(){
     current=buildDashboard(reports(),state.filters);
     const metrics=current.metrics;
+    renderGauges(current);renderTreemap(current);renderDensityHeatmap(current);
     $('exec-problem-analysis').innerHTML=executiveSummaryHTML(buildExecutiveSummary(current,state.archives),{interactive:true});
     $('exec-knowledge-list').innerHTML=knowledgeBaseHTML(current,$('exec-knowledge-query').value);
     const imported=state.mode==='imported';
@@ -124,7 +173,7 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
     $('exec-data-label').textContent=imported?(current.coverage.syntheticReports?'IMPORTED SAMPLE / MIXED DATA':'LOCAL REPORT DATA'):'DEMONSTRATION DATA';
     $('exec-data-note').textContent=imported?`${reports().length} report${reports().length===1?'':'s'} in this browser session. No endpoint or tenant connection.`:'Four sample investigations. No device or tenant is connected.';
     $('sidebar-data-mode').textContent=imported?'Imported reports stay in browser memory. No endpoint is connected.':'Synthetic records only. No endpoint is connected.';
-    $('exec-kpis').innerHTML=[['Diagnostic reports',metrics.reportsCount,'Reports contributing to this selection','▤'],['Priority findings',metrics.priorityCount,'Reported as error, high or critical','◇'],['Evidence records',metrics.eventsCount,'Individual records in the current view','⌁'],['Workstreams',metrics.categoriesCount,'Diagnostic categories represented','▦']].map(([label,value,hint,mark],index)=>`<article class="exec-kpi"><span class="exec-kpi-icon ${index===1?'priority':''}" aria-hidden="true">${mark}</span><div class="exec-kpi-label">${label}</div><strong class="exec-kpi-value">${number(value)}</strong><p class="exec-kpi-foot">${hint}</p></article>`).join('');
+    $('exec-kpis').innerHTML=[['Diagnostic reports',metrics.reportsCount,'Reports contributing to this selection','▤','M2,14 C12,8 24,14 46,6',metrics.reportsCount>0?'Session scope':'No reports','neutral'],['Priority findings',metrics.priorityCount,'Reported as error, high or critical','◇','M2,14 C14,12 24,6 46,4',metrics.priorityCount>0?'Review required':'No priority findings',metrics.priorityCount>0?'alert':'success'],['Evidence records',metrics.eventsCount,'Individual records in the current view','⌁','M2,14 C14,8 26,12 46,3',metrics.eventsCount>0?'Records in scope':'No records','info'],['Workstreams',metrics.categoriesCount,'Diagnostic categories represented','▦','M2,11 C12,5 24,10 46,7',`${metrics.categoriesCount} active`,'accent']].map(([label,value,hint,mark,sparkPath,badgeText,badgeType],index)=>`<article class="exec-kpi ${index===1&&(metrics.priorityCount>0)?'alert':''}"><span class="exec-kpi-icon ${index===1?'priority':''}" aria-hidden="true">${mark}</span><div class="exec-kpi-label">${label}</div><div class="exec-kpi-main"><strong class="exec-kpi-value">${number(value)}</strong><span class="exec-kpi-badge ${badgeType}">${badgeText}</span></div>${index===2&&current.timeline.length?`<svg class="exec-kpi-sparkline" viewBox="0 0 48 16" role="img" aria-label="Timed evidence activity across UTC buckets"><polyline points="${current.timeline.map((bucket,i)=>`${current.timeline.length===1?24:i/(current.timeline.length-1)*48},${15-bucket.events/Math.max(1,...current.timeline.map(b=>b.events))*14}`).join(' ')}" fill="none" stroke="currentColor" stroke-width="2"/></svg>`:''}<p class="exec-kpi-foot">${hint}</p></article>`).join('');
     const dated=current.events.filter(event=>event.timestamp).map(event=>event.timestamp).sort();
     $('exec-window').textContent=dated.length?`${dated[0].slice(0,10)}${last(dated).slice(0,10)!==dated[0].slice(0,10)?' – '+last(dated).slice(0,10):''} · UTC`:'NO TIMED EVIDENCE';
     $('exec-timeline').innerHTML=timelineSVG(current);
@@ -134,7 +183,7 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
     $('exec-domain-chart').innerHTML=current.domainCounts.filter(domain=>domain.total||domain.eventCount||state.filters.category==='all').map(domain=>`<div class="exec-domain-row"><button class="exec-domain-label ${state.filters.category===domain.category?'active':''}" type="button" data-exec-category="${e(domain.category)}" aria-pressed="${state.filters.category===domain.category}" aria-label="${e(domain.category)}: ${domain.total} findings">${e(domain.category)}</button><div class="exec-stack-track" role="img" aria-label="${e(domain.category)}: ${domain.error} errors, ${domain.warning} warnings, ${domain.info} informational">${['error','warning','info'].map(severity=>`<span class="exec-stack-segment" style="width:${domain[severity]/maximum*100}%;background:${COLORS[severity]}"></span>`).join('')}</div><strong class="exec-domain-total">${domain.total}</strong></div>`).join('')+'<div class="exec-chart-legend">'+['error','warning','info'].map(severity=>`<span class="exec-legend-item"><i class="exec-dot" aria-hidden="true" style="background:${COLORS[severity]}"></i>${SHORT[severity]}</span>`).join('')+'</div><p class="exec-chart-note">Bars compare recorded finding counts. A workstream with no findings is not automatically healthy.</p>';
     const stages=current.stageCounts.filter(stage=>stage.stage!=='unknown'||stage.count);
     const stageMax=Math.max(1,...stages.map(stage=>stage.count));
-    $('exec-stage-chart').innerHTML=`<div class="exec-stage-grid" style="--stage-columns:${stages.length}">${stages.map((stage,index)=>`<div class="exec-stage-item"><span class="exec-stage-label">${index+1}. ${e(stage.stage)}</span><strong class="exec-stage-count">${number(stage.count)}</strong><div class="exec-stage-meter" role="img" aria-label="${e(stage.stage)}: ${stage.count} observed records"><span aria-hidden="true" style="width:${stage.count/stageMax*100}%"></span></div></div>`).join('')}</div><p class="exec-stage-note">Stage counts describe observations in logs. They are not success rates or a conversion funnel.</p><div class="exec-lifecycle-note"><span>◈</span><div><strong>Evidence, then action</strong><p>Trace assignment → policy → execution → result. Verify the earliest supported failure before proposing a change.</p></div></div>`;
+    $('exec-stage-chart').innerHTML=`<div class="exec-stage-grid" style="--stage-columns:${stages.length}">${stages.map((stage,index)=>`<div class="exec-stage-item"><span class="exec-stage-label">${index+1}. ${e(stage.stage)}</span><strong class="exec-stage-count">${number(stage.count)}</strong><div class="exec-stage-meter" role="img" aria-label="${e(stage.stage)}: ${stage.count} observed records"><span aria-hidden="true" style="width:${stage.count/stageMax*100}%"></span></div><span class="exec-stage-pct">${Math.round(stage.count/stageMax*100)}% of peak stage count</span></div>`).join('')}</div><p class="exec-stage-note">Stage counts describe observations in logs. They are not success rates or a conversion funnel.</p><div class="exec-lifecycle-note"><span>◈</span><div><strong>Evidence, then action</strong><p>Trace assignment → policy → execution → result. Verify the earliest supported failure before proposing a change.</p></div></div>`;
     $('exec-priority-count').textContent=`${metrics.findingsCount} FINDING${metrics.findingsCount===1?'':'S'}`;
     $('exec-priority-table').innerHTML=current.priorityFindings.length?`<table><thead><tr><th>FINDING / REVIEW ITEM</th><th>WORKSTREAM</th><th>SEVERITY</th><th>EVIDENCE</th></tr></thead><tbody>${current.priorityFindings.slice(0,60).map(finding=>`<tr><td><button type="button" class="exec-finding-open" data-exec-finding="${e(finding.id)}">${e(finding.title)} <span aria-hidden="true">↗</span></button><p class="exec-row-summary">${e(finding.summary.slice(0,125))}${finding.summary.length>125?'…':''}</p></td><td><span class="exec-category-label">${e(finding.category)}</span></td><td>${badge(finding.severity)}</td><td><span class="exec-evidence-count">${finding.events.length}</span></td></tr>`).join('')}</tbody></table>${current.priorityFindings.length>60?'<p class="exec-chart-note">Showing 60 ranked findings. Narrow the filters or export the brief for the complete selection.</p>':''}`:'<div class="exec-empty-state">No findings in the current selection.<span>Clear the filters or import more evidence. This does not establish endpoint health.</span></div>';
     const observed=current.sourceCoverage.filter(source=>source.eventCount>0).length;
@@ -193,6 +242,27 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
   $('exec-detail').addEventListener('click',event=>{if(event.target===$('exec-detail')){const bounds=$('exec-detail').getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)closeDetail();}});
   document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.execInvestigateReport)openInvestigation(button.dataset.execInvestigateReport,button.dataset.execInvestigateFinding);else if(button.dataset.execView)setView(button.dataset.execView);else if(button.dataset.execCategory)updateFilter('category',button.dataset.execCategory);else if(button.dataset.execSeverity)updateFilter('severity',state.filters.severity===button.dataset.execSeverity?'all':button.dataset.execSeverity);else if(button.dataset.execFinding)openFinding(button.dataset.execFinding,button);});
   $('exec-export').addEventListener('click',()=>{try{const blob=new Blob([executiveBrief(current,datasetLabel(),state.archives)],{type:'text/html;charset=utf-8'});downloadBlob(blob,`windows-diagnostics-executive-brief${state.mode==='sample'?'-sample':''}.html`);showStatus('Executive brief download started. Review redaction and scope before sharing. No endpoint changes were applied.');}catch(error){showStatus(`Export could not start: ${sanitizeText(error.message)}`,true);}});
+  function applyTheme(theme){
+    const isDark=theme==='dark';
+    if(typeof document!=='undefined'&&document.body){
+      document.body.classList.toggle('dark-theme',isDark);
+      const icon=$('exec-theme-icon'),label=$('exec-theme-label');
+      if(icon)icon.textContent=isDark?'☀️':'🌙';
+      if(label)label.textContent=isDark?'Light':'Dark';
+      const toggle=$('exec-theme-toggle');if(toggle)toggle.setAttribute('aria-pressed',String(isDark));
+    }
+    try{localStorage.setItem('techlab-theme',theme);}catch{}
+  }
+  const themeToggle=$('exec-theme-toggle');
+  if(themeToggle){
+    let currentTheme='light';
+    try{currentTheme=localStorage.getItem('techlab-theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');}catch{}
+    applyTheme(currentTheme);
+    themeToggle.addEventListener('click',()=>{
+      const next=document.body.classList.contains('dark-theme')?'light':'dark';
+      applyTheme(next);
+    });
+  }
   setView('dashboard');render();
   return {state,workflow,importFiles,setView};
 }
