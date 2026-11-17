@@ -1,6 +1,6 @@
 /** Read CAB member bytes locally. No archive path is written to any filesystem. */
-import createLibarchive from './vendor/libarchive/engine.js?v=1.6.2';
-import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.2';
+import createLibarchive from './vendor/libarchive/engine.js?v=1.6.3';
+import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.3';
 
 let runtimePromise;
 async function runtime() {

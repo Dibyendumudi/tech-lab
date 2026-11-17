@@ -1,9 +1,9 @@
 /** Bundled synthetic interpretation checks. No supplied dataset is read or changed. */
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.2';
-import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.2';
-import { analyzeRawEvents } from './raw-analysis.js?v=1.6.2';
-import { parseRawLog } from './raw-parsers.js?v=1.6.2';
-import { parseReport } from './analytics.js?v=1.6.2';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.3';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.3';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.6.3';
+import { parseRawLog } from './raw-parsers.js?v=1.6.3';
+import { parseReport } from './analytics.js?v=1.6.3';
 const sources={'Win32 apps':'AppWorkload.json','Windows patching':'WindowsUpdateClient.json','Conditional Access':'SignIns.json','Autopilot & ESP':'Autopilot.json',Enterprise:'events.json'};
 const make=(name,category,message,expected,extra={})=>({name,category,filename:sources[category],content:JSON.stringify({TimeCreated:'2026-01-01T10:00:00Z',Message:message,...extra}),expected});
 export const VALIDATION_CASES = [

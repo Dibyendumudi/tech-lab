@@ -1,7 +1,7 @@
-import { escapeHTML as e, reportWarnings } from './utils.js?v=1.6.2';
-import { buildDiagnosticKPIs } from './diagnostic-kpis.js?v=1.6.2';
+import { escapeHTML as e, reportWarnings } from './utils.js?v=1.6.3';
+import { buildDiagnosticKPIs } from './diagnostic-kpis.js?v=1.6.3';
 /** Evidence-based management narrative. All quantities describe the visible records. */
-import { getKnowledgeBase } from './raw-analysis.js?v=1.6.2';
+import { getKnowledgeBase } from './raw-analysis.js?v=1.6.3';
 const uniq = values => [...new Set(values)];
 const stages = ['assignment','policy','execution','result'];
 const owners = {

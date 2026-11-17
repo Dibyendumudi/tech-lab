@@ -1,11 +1,11 @@
-import { escapeHTML as e, hasOwn, last, formatNumber as number, uniqueMessages, reportWarnings } from './utils.js?v=1.6.2';
-import { downloadBlob } from './downloads.js?v=1.6.2';
-import { scenarios } from './scenarios.js?v=1.6.2';
-import { initWorkflow } from './app.js?v=1.6.2';
-import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js?v=1.6.2';
-import { readDiagnosticFiles } from './importer.js?v=1.6.2';
-import { buildExecutiveSummary, executiveSummaryHTML, knowledgeBaseHTML } from './executive-summary.js?v=1.6.2';
-import { runValidationCases } from './validation-cases.js?v=1.6.2';
+import { escapeHTML as e, hasOwn, last, formatNumber as number, uniqueMessages, reportWarnings } from './utils.js?v=1.6.3';
+import { downloadBlob } from './downloads.js?v=1.6.3';
+import { scenarios } from './scenarios.js?v=1.6.3';
+import { initWorkflow } from './app.js?v=1.6.3';
+import { CATEGORIES, sampleReports, parseReport, buildDashboard, sanitizeText } from './analytics.js?v=1.6.3';
+import { readDiagnosticFiles } from './importer.js?v=1.6.3';
+import { buildExecutiveSummary, executiveSummaryHTML, knowledgeBaseHTML } from './executive-summary.js?v=1.6.3';
+import { runValidationCases } from './validation-cases.js?v=1.6.3';
 
 const COLORS = { error: '#bc6871', warning: '#d6ab61', info: '#769ab7' };
 const LABELS = { error: 'Error / high / critical', warning: 'Warning / medium', info: 'Informational / low' };
@@ -72,7 +72,7 @@ export function executiveBrief(data, datasetLabel, archives=[]) {
 }
 
 export function createExecutiveState() {
-  return {mode:'sample',sample:sampleReports(scenarios),imported:[],archives:[],filters:{category:'all',severity:'all',from:'',to:'',query:''},busy:false};
+  return {mode:'sample',sample:sampleReports(scenarios),imported:[],archives:[],filters:{category:'all',severity:'all',from:'',to:'',query:''},busy:false,view:'dashboard',evidencePage:0};
 }
 
 export function initExecutive({readFiles=readDiagnosticFiles}={}) {
@@ -110,7 +110,22 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
     }else workflow.openReport(reportId,findingId);
     closeDetail();setView('workflow');
   }
-  function setView(view){const dashboard=view==='dashboard';$('executive-view').hidden=!dashboard;$('workflow-view').hidden=dashboard;$('scenario-group').hidden=dashboard;document.querySelectorAll('[data-exec-view]').forEach(button=>{const active=button.dataset.execView===view;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});}
+  function setView(view){
+    state.view=['dashboard','evidence','workflow'].includes(view)?view:'dashboard';
+    const executive=state.view!=='workflow';
+    $('executive-view').hidden=!executive;$('workflow-view').hidden=executive;$('scenario-group').hidden=executive;
+    $('executive-view').setAttribute('data-view',state.view);
+    $('exec-evidence-panel').hidden=state.view!=='evidence';
+    document.querySelectorAll('[data-exec-view]').forEach(button=>{const active=button.dataset.execView===state.view;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
+    if(state.view==='evidence')renderEvidence();
+  }
+  function renderEvidence(){
+    if(state.view!=='evidence')return;
+    const pageSize=100,total=current.events.length,pages=Math.max(1,Math.ceil(total/pageSize));
+    state.evidencePage=Math.max(0,Math.min(state.evidencePage,pages-1));
+    const start=state.evidencePage*pageSize,records=current.events.slice(start,start+pageSize);
+    $('exec-evidence-content').innerHTML=`<div class="exec-panel-head"><div><h2>Evidence &amp; findings</h2><p class="exec-panel-sub">${e(datasetLabel())} · ${number(total)} records · ${number(current.findings.length)} findings in the current filters</p></div></div><div class="exec-evidence-body"><p>${state.mode==='sample'?'Demonstration records are shown. Import your CAB or logs above to replace them with your evidence.':'These records and findings come from your imported files. Switching views keeps this dataset; reloading the page clears the browser session.'}</p><h3>Findings · ${number(current.findings.length)}</h3>${current.priorityFindings.length?`<div class="exec-evidence-table-scroll" role="region" aria-label="Findings in the current selection" tabindex="0"><table class="exec-evidence-table"><thead><tr><th scope="col">Finding</th><th scope="col">Workstream</th><th scope="col">Severity</th><th scope="col">Linked records</th></tr></thead><tbody>${current.priorityFindings.slice(0,60).map(finding=>`<tr><td><button type="button" class="exec-finding-open" data-exec-finding="${e(finding.id)}">${e(finding.title)}</button></td><td>${e(finding.category)}</td><td>${badge(finding.severity)}</td><td>${number(finding.events.length)}</td></tr>`).join('')}</tbody></table></div>${current.findings.length>60?'<p>Showing the first 60 ranked findings. Narrow the filters or export the brief for all findings.</p>':''}`:'<p>No findings match the current selection. Evidence may still be present; no matched finding does not establish endpoint health.</p>'}<h3>Evidence records · ${number(total)}</h3><p role="status">${total?`Showing ${number(start+1)}–${number(start+records.length)} of ${number(total)} records`:'No evidence matches the current selection.'}</p><div class="exec-evidence-table-scroll" role="region" aria-label="Imported or demonstration evidence records" tabindex="0"><table class="exec-evidence-table"><thead><tr><th scope="col">UTC time</th><th scope="col">Source / line</th><th scope="col">Stage</th><th scope="col">Codes</th><th scope="col">Evidence</th></tr></thead><tbody>${records.map(record=>`<tr><td>${e(formatTime(record.timestamp))}</td><td>${e(record.source)}${record.line!==null?':'+e(record.line):''}</td><td>${e(record.stage)}</td><td>${e(record.codes.join(', '))}</td><td><pre>${e(record.message)}</pre></td></tr>`).join('')}</tbody></table></div><div class="exec-evidence-pagination"><button type="button" class="exec-btn" id="exec-evidence-prev" ${state.evidencePage===0?'disabled':''}>Previous records</button><span>Page ${number(state.evidencePage+1)} of ${number(pages)}</span><button type="button" class="exec-btn" id="exec-evidence-next" ${state.evidencePage>=pages-1?'disabled':''}>Next records</button></div></div>`;
+  }
   function renderGauges(data){
     const el=$('exec-gauges');
     if(!el)return;
@@ -159,10 +174,11 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
       return `<span class="exec-heatmap-cell" style="background:${colors[idx]}" title="${e(b.label)}: ${b.events} records"></span>`;
     }).join('')}</div><span class="exec-heatmap-legend">Peak: ${max}</span></div>`;
   }
-  function resetFilters(){state.filters={category:'all',severity:'all',from:'',to:'',query:''};for(const [key,id] of Object.entries({category:'exec-category',severity:'exec-severity',from:'exec-from',to:'exec-to',query:'exec-search'}))$(id).value=state.filters[key];}
+  function resetFilters(){clearTimeout(searchTimer);state.evidencePage=0;state.filters={category:'all',severity:'all',from:'',to:'',query:''};for(const [key,id] of Object.entries({category:'exec-category',severity:'exec-severity',from:'exec-from',to:'exec-to',query:'exec-search'}))$(id).value=state.filters[key];}
   function render(){
     current=buildDashboard(reports(),state.filters);
     const metrics=current.metrics;
+    renderEvidence();
     renderGauges(current);renderTreemap(current);renderDensityHeatmap(current);
     $('exec-problem-analysis').innerHTML=executiveSummaryHTML(buildExecutiveSummary(current,state.archives),{interactive:true});
     $('exec-knowledge-list').innerHTML=knowledgeBaseHTML(current,$('exec-knowledge-query').value);
@@ -194,7 +210,7 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
     $('exec-notes').innerHTML='<ul>'+notes.slice(0,40).map(note=>`<li>${e(note)}</li>`).join('')+'</ul>';
     $('exec-export').disabled=state.busy||(!reports().length&&!state.archives.length);
   }
-  function updateFilter(key,value){state.filters[key]=value;if(key==='category')$('exec-category').value=value;if(key==='severity')$('exec-severity').value=value;render();}
+  function updateFilter(key,value){state.evidencePage=0;state.filters[key]=value;if(key==='category')$('exec-category').value=value;if(key==='severity')$('exec-severity').value=value;render();}
   function openFinding(id,trigger){
     detailTrigger=trigger || document.activeElement;
     const finding=current.priorityFindings.find(item=>item.id===id);if(!finding)return;
@@ -232,7 +248,7 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
   $('workflow-dataset').addEventListener('change',event=>changeDataset(event.target.value));
   $('exec-category').addEventListener('change',event=>updateFilter('category',event.target.value));
   $('exec-severity').addEventListener('change',event=>updateFilter('severity',event.target.value));
-  function changeDates(){const from=$('exec-from').value,to=$('exec-to').value;if(from&&to&&from>to){showStatus('The start date must be on or before the end date. The previous filter remains active.',true);return;}state.filters.from=from;state.filters.to=to;$('exec-import-status').hidden=true;render();}
+  function changeDates(){const from=$('exec-from').value,to=$('exec-to').value;if(from&&to&&from>to){showStatus('The start date must be on or before the end date. The previous filter remains active.',true);return;}state.evidencePage=0;state.filters.from=from;state.filters.to=to;$('exec-import-status').hidden=true;render();}
   $('exec-from').addEventListener('change',changeDates);$('exec-to').addEventListener('change',changeDates);
   $('exec-search').addEventListener('input',event=>{const query=event.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(()=>updateFilter('query',query),200);});
   $('exec-reset').addEventListener('click',()=>{clearTimeout(searchTimer);resetFilters();$('exec-import-status').hidden=true;render();});
@@ -240,7 +256,7 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
   $('exec-detail').addEventListener('keydown',event=>{if(event.key==='Escape' && typeof $('exec-detail').close!=='function') closeDetail();});
   $('exec-close-detail').addEventListener('click',()=>closeDetail());
   $('exec-detail').addEventListener('click',event=>{if(event.target===$('exec-detail')){const bounds=$('exec-detail').getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)closeDetail();}});
-  document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.disabled)return;if(button.dataset.execInvestigateReport)openInvestigation(button.dataset.execInvestigateReport,button.dataset.execInvestigateFinding);else if(button.dataset.execView)setView(button.dataset.execView);else if(button.dataset.execCategory)updateFilter('category',button.dataset.execCategory);else if(button.dataset.execSeverity)updateFilter('severity',state.filters.severity===button.dataset.execSeverity?'all':button.dataset.execSeverity);else if(button.dataset.execFinding)openFinding(button.dataset.execFinding,button);});
+  document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.disabled)return;if(button.id==='exec-evidence-prev'||button.id==='exec-evidence-next'){state.evidencePage+=button.id==='exec-evidence-next'?1:-1;renderEvidence();}else if(button.dataset.execInvestigateReport)openInvestigation(button.dataset.execInvestigateReport,button.dataset.execInvestigateFinding);else if(button.dataset.execView)setView(button.dataset.execView);else if(button.dataset.execCategory)updateFilter('category',button.dataset.execCategory);else if(button.dataset.execSeverity)updateFilter('severity',state.filters.severity===button.dataset.execSeverity?'all':button.dataset.execSeverity);else if(button.dataset.execFinding)openFinding(button.dataset.execFinding,button);});
   $('exec-export').addEventListener('click',()=>{try{const blob=new Blob([executiveBrief(current,datasetLabel(),state.archives)],{type:'text/html;charset=utf-8'});downloadBlob(blob,`windows-diagnostics-executive-brief${state.mode==='sample'?'-sample':''}.html`);showStatus('Executive brief download started. Review redaction and scope before sharing. No endpoint changes were applied.');}catch(error){showStatus(`Export could not start: ${sanitizeText(error.message)}`,true);}});
   function applyTheme(theme){
     const isDark=theme==='dark';
@@ -263,7 +279,7 @@ export function initExecutive({readFiles=readDiagnosticFiles}={}) {
       applyTheme(next);
     });
   }
-  setView('dashboard');render();
+  setView(document.defaultView?.location?.hash==='#evidence'?'evidence':'dashboard');render();
   return {state,workflow,importFiles,setView};
 }
 

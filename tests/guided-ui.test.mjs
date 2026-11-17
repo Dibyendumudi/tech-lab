@@ -387,3 +387,56 @@ test('theme toggle exposes and updates its selected state',t=>{
   click('#exec-theme-toggle');
   assert.equal(document.body.classList.contains('dark-theme'),before);
 });
+
+test('live evidence view shares imports, filters, details and exports with the executive dashboard',async t=>{
+  const {app,$,click,change,downloads}=mount(t);
+  click('[data-exec-view="evidence"]');
+  assert.equal($('#exec-evidence-panel').hidden,false);
+  assert.match($('#exec-evidence-content').textContent,/Demonstration records/);
+  await app.importFiles([reportFile()]);
+  assert.equal(app.state.view,'evidence');
+  assert.match($('#exec-evidence-content').textContent,/Endpoint detection mismatch/);
+  assert.match($('#exec-evidence-content').textContent,/Endpoint installer returned exit code 0/);
+  assert.doesNotMatch($('#exec-evidence-content').textContent,/DemoDesk/);
+  assert.equal($('#exec-evidence-content').querySelector('img'),null); // untrusted markup stays escaped
+  click('#exec-evidence-content [data-exec-finding]');
+  assert.match($('#exec-detail-content').textContent,/Endpoint installer returned exit code 0/);
+  click('#exec-close-detail');
+  click('[data-exec-view="dashboard"]');
+  assert.equal($('#exec-evidence-panel').hidden,true);
+  assert.match($('#exec-priority-table').textContent,/Endpoint detection mismatch/);
+  click('[data-exec-view="evidence"]');
+  change('#exec-category','Windows patching');
+  assert.match($('#exec-evidence-content').textContent,/No evidence matches/);
+  click('#exec-reset');
+  assert.match($('#exec-evidence-content').textContent,/Showing 1–2 of 2 records/);
+  click('#exec-export');
+  assert.match(await downloads.at(-1).blob.text(),/Endpoint detection mismatch/);
+});
+
+test('live evidence pages search the entire selection and reset after filters and imports',async t=>{
+  const {app,$,click,window}=mount(t);
+  const raw=endpointReport();
+  raw.events=Array.from({length:205},(_,i)=>({...raw.events[0],uid:`live-${i}`,message:`Live record ${i+1}`,line:i+1}));
+  raw.findings=[];
+  await app.importFiles([new File([JSON.stringify(raw)],'records.json')]);
+  click('[data-exec-view="evidence"]');
+  assert.equal($('#exec-evidence-content').querySelectorAll('tbody tr').length,100);
+  click('#exec-evidence-next');click('#exec-evidence-next');
+  assert.match($('#exec-evidence-content').textContent,/Showing 201–205 of 205 records/);
+  const input=$('#exec-search');input.value='Live record 205';input.dispatchEvent(new window.Event('input',{bubbles:true}));
+  await new Promise(resolve=>setTimeout(resolve,230));
+  assert.match($('#exec-evidence-content').textContent,/Showing 1–1 of 1 records/);
+  assert.match($('#exec-evidence-content').textContent,/Live record 205/);
+  input.value='old pending search';input.dispatchEvent(new window.Event('input',{bubbles:true}));
+  await app.importFiles([reportFile()]);
+  await new Promise(resolve=>setTimeout(resolve,230));
+  assert.equal(app.state.filters.query,'');
+  assert.match($('#exec-evidence-content').textContent,/Showing 1–2 of 2 records/);
+});
+
+test('former showcase URL enters the live evidence route rather than synthetic charts',()=>{
+  const redirect=readFileSync(new URL('../docs/dashboard-showcase.html',import.meta.url),'utf8');
+  assert.match(redirect,/url=\.\/index.html#evidence/);
+  assert.doesNotMatch(redirect,/14,823|Math.random|tailwindcss/);
+});

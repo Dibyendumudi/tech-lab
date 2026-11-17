@@ -434,3 +434,8 @@ body.dark-theme .exec-heatmap-title,body.dark-theme .exec-heatmap-legend{color:#
 @media(max-width:950px){.exec-gauges{grid-template-columns:1fr;gap:10px}}
 
 @media(prefers-reduced-motion:reduce){.exec-gauge-svg .gauge-fill,.exec-stage-meter>span,.exec-stage-item,.exec-heatmap-cell{transition:none}}
+
+/* Evidence view uses the executive controller's current import and filters. */
+.exec-view[data-view="evidence"] #exec-problem-analysis,.exec-view[data-view="evidence"] #exec-knowledge,.exec-view[data-view="evidence"] .exec-grid-primary,.exec-view[data-view="evidence"] .exec-grid-secondary,.exec-view[data-view="evidence"] .exec-lower-grid{display:none}
+.exec-evidence-body{padding:18px;font-size:12px;line-height:1.6}.exec-evidence-table-scroll{overflow:auto;max-height:560px;border:1px solid var(--exec-border)}
+.exec-evidence-table{width:100%;border-collapse:collapse;min-width:740px;font-size:11px}.exec-evidence-table th,.exec-evidence-table td{text-align:left;padding:12px;border-bottom:1px solid var(--exec-border);vertical-align:top}.exec-evidence-table th{position:sticky;top:0;background:#f4f7fa;z-index:1}.exec-evidence-table pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:inherit;max-width:650px;min-width:250px}.exec-evidence-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}body.dark-theme .exec-evidence-table th{background:#102236;color:#e2e8f0}
