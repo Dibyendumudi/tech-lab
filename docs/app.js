@@ -1,8 +1,9 @@
-import { escapeHTML } from './utils.js?v=1.6.4';
-export { escapeHTML } from './utils.js?v=1.6.4';
-import { downloadBlob } from './downloads.js?v=1.6.4';
-import { scenarios } from './scenarios.js?v=1.6.4';
-import { casesFromReports, reportFromCase } from './guided-data.js?v=1.6.4';
+import {artifactInvestigationHTML} from './artifact-investigation.js?v=1.6.5';
+import { escapeHTML } from './utils.js?v=1.6.5';
+export { escapeHTML } from './utils.js?v=1.6.5';
+import { downloadBlob } from './downloads.js?v=1.6.5';
+import { scenarios } from './scenarios.js?v=1.6.5';
+import { casesFromReports, reportFromCase } from './guided-data.js?v=1.6.5';
 
 export const steps = [
   { label: 'Select case', hint: 'Choose the signal', title: 'Start with a specific incident.', action: 'Load sample logs →' },
@@ -79,7 +80,7 @@ export class DemoWorkflow {
   }
 }
 
-export function reportHTML(report) {
+export function reportHTML(report, {archives=[]} = {}) {
   const imported = !report.scenario;
   if (imported) report = {
     ...report, scenario: {title: report.report_metadata.title || 'Imported investigation'},
@@ -87,11 +88,11 @@ export function reportHTML(report) {
     findings: report.findings.map(finding => ({...finding, observation:finding.summary, rootCause:finding.root_cause, evidenceIds:finding.evidence || []}))
   };
   const synthetic = report.report_metadata.synthetic !== false;
-  const findings = report.findings.map(finding => `<section><p class="meta">${e(finding.severity)} · ${e(finding.confidence)} confidence</p><h2>${e(finding.title)}</h2><p>${e(finding.observation)}</p><h3>Likely root cause</h3><p>${e(finding.rootCause)}</p><h3>Evidence</h3>${finding.evidenceIds.map(id => { const record = report.events.find(event => event.id === id); return record ? `<p><a href="#${e(record.id)}">${e(record.source)} · line ${e(record.line)} · ${e(record.time)}</a></p>` : ''; }).join('')}<h3>Verification checks</h3><ol>${finding.checks.map(check => `<li>${e(check)}</li>`).join('')}</ol><h3>Suggested resolution · not executed</h3><ol>${finding.recommendations.map(value => `<li>${e(value)}</li>`).join('')}</ol></section>`).join('');
+  const findings = report.findings.map(finding => `<section><p class="meta">${e(finding.severity)} · ${e(finding.confidence)} confidence</p><h2>${e(finding.title)}</h2><p>${e(finding.observation)}</p><h3>Likely root cause</h3><p>${e(finding.rootCause)}</p><h3>Evidence</h3>${finding.evidenceIds.map(id => { const record = report.events.find(event => event.id === id); return record ? `<p><a href="#${e(record.id)}">${e(record.source)} · line ${e(record.line)} · ${e(record.time)}</a></p>` : ''; }).join('')}${artifactInvestigationHTML(report.events.filter(event=>finding.evidenceIds.includes(event.id)),archives)}<h3>Verification checks</h3><ol>${finding.checks.map(check => `<li>${e(check)}</li>`).join('')}</ol><h3>Suggested resolution · not executed</h3><ol>${finding.recommendations.map(value => `<li>${e(value)}</li>`).join('')}</ol></section>`).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Windows Diagnostics · Investigation report</title><style>body{font:14px/1.7 'Segoe UI',system-ui,sans-serif;background:#f3f7fa;color:#21374c;margin:0}header{background:#10243a;color:white;padding:35px max(24px,calc((100vw - 960px)/2))}main{max-width:960px;margin:auto;padding:24px}section{background:white;border:1px solid #e1e8f0;padding:24px;margin-bottom:18px;border-radius:10px}h1{font-size:28px}h2{font-size:21px}h3{font-size:14px;margin-top:25px}.meta{font-size:11px;color:#668374;text-transform:uppercase}.notice{border-left:4px solid #c69335}a{color:#087f7c}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 Consolas,monospace}.event{border-top:1px solid #e1e8f0;padding:18px 0}</style></head><body><header><small>WINDOWS DIAGNOSTICS / MANAGED BY DIBYENDU</small><h1>${e(report.scenario.title)}</h1><p>Read-only · ${synthetic ? 'Synthetic demonstration report' : 'Imported diagnostic evidence'}</p></header><main><section class="notice"><strong>${synthetic ? 'SYNTHETIC DEMO · NO DEVICE CONNECTED' : 'IMPORTED EVIDENCE · NO DEVICE CONNECTED'}</strong><p>${e(report.disclaimer)}</p><p>Generated ${e(report.report_metadata.generated_at)}. Changes applied: 0.</p></section>${(report.warnings || []).length ? `<section><h2>Scope and limitations</h2><ul>${report.warnings.map(value => `<li>${e(value)}</li>`).join('')}</ul></section>` : ''}${findings || '<section><p>No recognized finding was supplied. This does not establish endpoint health.</p></section>'}<section><h2>Evidence timeline</h2>${report.events.map(event => `<div id="${e(event.id)}" class="event"><strong>${e(event.time)} · ${e(event.source)}:${e(event.line)}</strong><p class="meta">${e(event.stage)} · ${e(event.context)} · ${e(event.code || 'No error code')}</p><pre>${e(event.message)}</pre><small>${e(event.correlationId)}</small></div>`).join('')}</section><p>Windows Diagnostics · Managed by Dibyendu. ${synthetic ? 'This report contains demonstration data only.' : 'Imported evidence, reviewer notes and suggestions only. Review redaction before sharing.'}</p></main></body></html>`;
 }
 
-export function initWorkflow() {
+export function initWorkflow({getArchives=()=>[]} = {}) {
   let state = new DemoWorkflow();
   const $ = id => document.getElementById(id);
   const imported = () => state.scenario.imported === true;
@@ -110,7 +111,7 @@ export function initWorkflow() {
   function download(format) {
     try {
       const report = state.report();
-      const content = format === 'html' ? reportHTML(report) : JSON.stringify(report, null, 2);
+      const content = format === 'html' ? reportHTML(report,{archives:getArchives()}) : JSON.stringify(report, null, 2);
       const blob = new Blob([content], { type: format === 'html' ? 'text/html;charset=utf-8' : 'application/json;charset=utf-8' });
       downloadBlob(blob, `windows-diagnostics-${imported() ? 'investigation' : 'demo'}-${state.scenario.id}.${format}`);
       toast(`${copy('Synthetic', 'Investigation')} ${format.toUpperCase()} report download started. No changes were applied.`);
@@ -143,7 +144,7 @@ export function initWorkflow() {
       const selected = findings.find(finding => finding.id === state.selectedFindingId) || findings[0];
       if (selected) state.selectedFindingId = selected.id;
       const cards = findings.map(finding => `<button type="button" class="finding-card ${selected?.id === finding.id ? 'selected' : ''}" data-finding="${e(finding.id)}">${badge(finding.severity.toUpperCase(), finding.severity)}<h4>${e(finding.title)}</h4><p>${e(finding.observation)}</p><div class="confidence">${e(finding.confidence)} confidence · ${finding.evidenceIds.length} evidence records</div></button>`).join('');
-      return `<div class="finding-grid">${cards || `<div class="panel empty">${state.query ? 'No findings match the search. Clear it to inspect all findings.' : 'No recognized findings were supplied. Review source coverage and evidence; this does not establish endpoint health.'}</div>`}</div>${selected ? `<article class="panel panel-padding finding-detail"><div class="review-title"><h4>${e(selected.title)}</h4>${badge('Suggested resolution only', 'success')}</div><p>${e(selected.observation)}</p><div class="cause"><div class="eyebrow">LIKELY ROOT CAUSE</div><p>${e(selected.rootCause || 'A root cause is not established by the supplied evidence.')}</p></div><div class="eyebrow">LINKED EVIDENCE · SELECT TO INSPECT</div>${selected.evidenceIds.map(id => { const record = scenario.events.find(event => event.id === id); return record ? `<button type="button" class="evidence-link" data-evidence="${e(id)}">${e(record.source)}:${e(record.line)} ↗</button>` : ''; }).join('')}${note('Interpretation limits', scenario.stageNote.findings)}</article>` : ''}`;
+      return `<div class="finding-grid">${cards || `<div class="panel empty">${state.query ? 'No findings match the search. Clear it to inspect all findings.' : 'No recognized findings were supplied. Review source coverage and evidence; this does not establish endpoint health.'}</div>`}</div>${selected ? `<article class="panel panel-padding finding-detail"><div class="review-title"><h4>${e(selected.title)}</h4>${badge('Suggested resolution only', 'success')}</div><p>${e(selected.observation)}</p><div class="cause"><div class="eyebrow">LIKELY ROOT CAUSE</div><p>${e(selected.rootCause || 'A root cause is not established by the supplied evidence.')}</p></div>${artifactInvestigationHTML(scenario.events.filter(event=>selected.evidenceIds.includes(event.id)),getArchives())}<div class="eyebrow">LINKED EVIDENCE · SELECT TO INSPECT</div>${selected.evidenceIds.map(id => { const record = scenario.events.find(event => event.id === id); return record ? `<button type="button" class="evidence-link" data-evidence="${e(id)}">${e(record.source)}:${e(record.line)} ↗</button>` : ''; }).join('')}${note('Interpretation limits', scenario.stageNote.findings)}</article>` : ''}`;
     }
     const selected = scenario.findings.find(finding => finding.id === state.selectedFindingId) || scenario.findings[0];
     if (!selected) return '<div class="panel empty">No recognized finding is available. Add the right source evidence before choosing a remediation.</div>';

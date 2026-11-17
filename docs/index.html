@@ -7,9 +7,9 @@
   <meta name="referrer" content="no-referrer">
   <title>Windows Diagnostics · Managed by Dibyendu</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230b827e'/%3E%3Cpath d='M10 12l4 16 6-11 6 11 4-16' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./styles.css?v=1.6.4">
-  <link rel="stylesheet" href="./executive.css?v=1.6.4">
-  <link rel="stylesheet" href="./analysis.css?v=1.6.4">
+  <link rel="stylesheet" href="./styles.css?v=1.6.5">
+  <link rel="stylesheet" href="./executive.css?v=1.6.5">
+  <link rel="stylesheet" href="./analysis.css?v=1.6.5">
 </head>
 <body>
   <div class="app-shell">
@@ -35,6 +35,7 @@
         <div class="exec-filterbar" aria-label="Dashboard filters"><label class="exec-filter"><span>WORKSTREAM</span><select id="exec-category"><option value="all">All workstreams</option><option>Win32 apps</option><option>Windows patching</option><option>Conditional Access</option><option>Autopilot &amp; ESP</option><option>Enterprise</option></select></label><label class="exec-filter"><span>SEVERITY</span><select id="exec-severity"><option value="all">All findings</option><option value="error">Error / high / critical</option><option value="warning">Warning / medium</option><option value="info">Informational / low</option></select></label><label class="exec-filter"><span>FROM · UTC</span><input id="exec-from" type="date"></label><label class="exec-filter"><span>TO · UTC</span><input id="exec-to" type="date"></label><label class="exec-filter exec-search"><span class="exec-sr-only">Search report findings or evidence</span><input id="exec-search" type="search" placeholder="Search findings or error codes…" autocomplete="off"></label><button class="exec-filter-reset" id="exec-reset" type="button">Reset</button></div>
         <div id="exec-kpis" class="exec-kpis" aria-label="Diagnostic report measures"></div>
         <div id="exec-gauges" class="exec-gauges" aria-label="Diagnostic coverage gauges"></div>
+        <section id="exec-artifact-panel" class="exec-panel" aria-label="Exact targets and failing operations" hidden></section>
         <section id="exec-evidence-panel" class="exec-panel" aria-label="Evidence and findings for the current dataset" hidden><div id="exec-evidence-content"></div></section>
         <section id="exec-problem-analysis" class="exec-panel exec-analysis-panel" aria-label="Executive problem analysis" aria-live="polite"></section>
         <details id="exec-knowledge" class="exec-panel exec-knowledge"><summary><span>Knowledge base &amp; interpretation checks</span><small>Explore supported patterns and test the local analyzer</small></summary><div class="exec-knowledge-body"><p class="exec-summary-scope">Built-in checks use bundled synthetic examples. They do not validate your endpoint, confirm the cause of an incident or establish complete log coverage.</p><div class="exec-knowledge-controls"><label><span class="exec-sr-only">Search knowledge patterns</span><input id="exec-knowledge-query" type="search" placeholder="Search a code, workstream or problem…" autocomplete="off"></label><button id="exec-run-validation" type="button" class="exec-btn">Run built-in checks</button></div><div id="exec-validation-status" class="exec-validation-status" role="status" hidden></div><div id="exec-validation-results" class="exec-validation-results" hidden></div><div id="exec-knowledge-list"></div></div></details>
@@ -62,6 +63,6 @@
   <div id="toast" class="toast" role="status" hidden></div>
   <dialog id="exec-detail" aria-labelledby="exec-dialog-title"><div class="exec-dialog-head"><div><div class="exec-kicker" id="exec-dialog-domain"></div><h2 id="exec-dialog-title">Finding details</h2></div><button id="exec-close-detail" class="exec-icon-btn" type="button" aria-label="Close finding details">✕</button></div><div id="exec-detail-content" class="exec-detail-body"></div></dialog>
   <noscript><div class="noscript">Enable JavaScript to use this interactive demo. It runs entirely in your browser.</div></noscript>
-  <script type="module" src="./executive.js?v=1.6.4"></script>
+  <script type="module" src="./executive.js?v=1.6.5"></script>
 </body>
 </html>

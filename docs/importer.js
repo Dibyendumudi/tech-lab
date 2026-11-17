@@ -1,10 +1,10 @@
-import { hashText, uniqueMessages } from './utils.js?v=1.6.4';
+import { hashText, uniqueMessages } from './utils.js?v=1.6.5';
 /** Browser-local file decoding, raw evidence analysis and report validation. */
-import { parseReport, sanitizeText } from './analytics.js?v=1.6.4';
-import { parseRawLog } from './raw-parsers.js?v=1.6.4';
-import { analyzeRawEvents } from './raw-analysis.js?v=1.6.4';
-import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.4';
-import { extractCabEntries } from './cab-extractor.js?v=1.6.4';
+import { parseReport, sanitizeText } from './analytics.js?v=1.6.5';
+import { parseRawLog } from './raw-parsers.js?v=1.6.5';
+import { analyzeRawEvents } from './raw-analysis.js?v=1.6.5';
+import { inspectCabinet, CAB_LIMITS } from './cab-format.js?v=1.6.5';
+import { extractCabEntries } from './cab-extractor.js?v=1.6.5';
 
 export const IMPORT_LIMITS = Object.freeze({ files: 20, fileBytes: 20 * 1024 * 1024, totalBytes: 50 * 1024 * 1024, rawEvents: 50000, events: 100000, findings: 3000 });
 export const IMPORT_EXTENSIONS = Object.freeze(['.cab', '.log', '.txt', '.json', '.jsonl', '.ndjson', '.csv', '.xml']);
@@ -229,7 +229,7 @@ export function readDiagnosticFiles(files, options = {}) {
     let worker, timeout;
     const finish = (callback, value) => { clearTimeout(timeout); worker?.terminate(); callback(value); };
     try {
-      worker = new Worker(new URL('./import-worker.js?v=1.6.4', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./import-worker.js?v=1.6.5', import.meta.url), { type: 'module' });
       timeout = setTimeout(() => finish(reject, new Error('Import timed out. Select fewer files or a smaller export.')), 180000);
       worker.onmessage = event => event.data.error ? finish(reject, new Error(event.data.error)) : finish(resolve, event.data.result);
       worker.onerror = () => finish(reject, new Error('The local import worker could not start. Refresh the page and try again. No files were uploaded.'));

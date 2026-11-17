@@ -1,4 +1,4 @@
-import { hashText, last, hasOwn as own } from './utils.js?v=1.6.4';
+import { hashText, last, hasOwn as own } from './utils.js?v=1.6.5';
 // Local, bounded readers for Windows text exports. No network, storage, or execution.
 const MAX_TEXT = 20 * 1024 * 1024;
 const MAX_EVENTS = 50_000;

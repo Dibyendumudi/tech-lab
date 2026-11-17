@@ -1,8 +1,9 @@
-import { hashText } from './utils.js?v=1.6.4';
+import {describeMissingArtifact} from './artifact-investigation.js?v=1.6.5';
+import { hashText } from './utils.js?v=1.6.5';
 /** Local observations from imported text exports. Never executes a resolution. */
-import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.4';
-import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.4';
-import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.4';
+import { CATEGORIES, sanitizeText } from './analytics.js?v=1.6.5';
+import { EXTRA_KNOWLEDGE } from './knowledge-base.js?v=1.6.5';
+import { STATE_KNOWLEDGE } from './sourced-knowledge.js?v=1.6.5';
 
 const MAX_EVENTS = 50000;
 const MAX_FINDINGS = 1000;
@@ -245,6 +246,7 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
       stage: inferStage(message), context: inferContext(message)
     };
   });
+  const eventsById=new Map(events.map(event=>[event.uid,event]));
   const findings = [];
   const matchedEvents = new Set();
   let dropped = 0;
@@ -255,17 +257,22 @@ export function analyzeRawEvents(inputEvents, sources = [], warnings = []) {
       if (event.category !== item.category || configurationOnly(event) || !item.test(event)) continue;
       matchedEvents.add(event.uid);
       // Same source and context, same explicit pattern; no time-based causation.
-      const key = `${event.source}\0${event.context}`;
+      const detail=/^code-0x8007000[23]:/.test(item.key)?describeMissingArtifact(event):null;
+      const key = `${event.source}\0${event.context}`+(detail?`\0${detail.kind}\0${detail.severity}`:'');
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(event.uid);
     }
-    for (const [group, evidence] of groups) add({
-      id: 'finding-' + hash(item.key + '\0' + group), title: item.title, category: item.category,
-      severity: item.severity, confidence: item.confidence, diagnosis: {type:'rule',rule_id:item.key},
-      summary: `${item.title}. ${evidence.length} record(s) in this source/context match the documented pattern. Review the stated meaning and verification checks; repeated matches do not establish a common cause.`,
-      root_cause: item.root, evidence, checks: item.checks, recommendations: item.recommendations,
-      references: item.reference ? [item.reference] : DOCS[item.category] ? [DOCS[item.category]] : []
-    });
+    for (const [group, evidence] of groups) {
+      const first=eventsById.get(evidence[0]);
+      const detail=/^code-0x8007000[23]:/.test(item.key)?describeMissingArtifact(first):null;
+      add({
+        id:'finding-'+hash(item.key+'\0'+group),title:detail?.title||item.title,category:item.category,
+        severity:detail?.severity||item.severity,confidence:item.confidence,diagnosis:{type:'rule',rule_id:item.key},
+        summary:detail?`${detail.title}. ${evidence.length} linked record(s) identify this operation. Exact targets and source lines are listed in the dashboard investigation table.`:`${item.title}. ${evidence.length} record(s) in this source/context match the documented pattern. Review the stated meaning and verification checks; repeated matches do not establish a common cause.`,
+        root_cause:detail?.interpretation||item.root,evidence,checks:detail?[detail.check]:item.checks,recommendations:detail?[detail.recommendation]:item.recommendations,
+        references:detail?[detail.reference]:item.reference?[item.reference]:DOCS[item.category]?[DOCS[item.category]]:[]
+      });
+    }
   }
   const unresolved = new Map();
   for (const event of events) {

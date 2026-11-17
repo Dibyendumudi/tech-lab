@@ -454,3 +454,21 @@ test('local-clock evidence stays visible and a verified source offset reaches th
   assert.equal(app.state.imported[0].events[0].timestamp,'2026-06-23T08:33:15.200Z');
   assert.match($('#exec-evidence-content').textContent,/08:33 UTC/);
 });
+
+test('dashboard exact-target investigation opens linked findings and follows current filters',async t=>{
+ const {app,$,click,change,downloads}=mount(t);
+ const log='Failed (HResult: 0x80070002) to CollectFileEntry:c:\\windows\\provisioning\\autopilot\\autopilotconfigurationfile.json\nFailed (HResult:0x80070002) to dump HKCU registry:software\\microsoft\\example';
+ await app.importFiles([new File([log],'MdmLogCollectorFootPrint.txt')]);
+ const panel=$('#exec-artifact-panel');
+ assert.equal(panel.hidden,false);
+ assert.match(panel.textContent,/CollectFileEntry/);
+ assert.match(panel.textContent,/HKCU\\software\\microsoft\\example/);
+ assert.match(panel.textContent,/not a file/);
+ click('#exec-artifact-panel [data-exec-finding]');
+ assert.equal($('#exec-detail').open,true);
+ assert.match($('#exec-detail-content').textContent,/Exact targets/);
+ click('#exec-close-detail');click('#exec-export');
+ assert.match(await downloads.at(-1).blob.text(),/autopilotconfigurationfile.json/);
+ change('#exec-category','Windows patching');
+ assert.equal(panel.hidden,true);
+});
